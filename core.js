@@ -2,7 +2,8 @@
 // dep = { pdfjs, makeCanvas(w,h), PDFLib, toPng(canvas) }
 const PW = 384, M = 6, SC = 6;           // larghezza stampabile (punti), margine, px per pt nel campionamento
 const LOGO_IN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACGAQAAAABP9orkAAADnUlEQVR42p2Yv3LjNhDGf4A0JgqPzXQuPHN8DHfmo7hM6fKqGNelzCPcozCTK1z6DY6XueJKyHMFlKG4KUjqDwURm6CRRvq4XOzu9+0CRoDv9yyvjQW4IbcsQKGDRa+CuUYFW7cqGEEFs1FnrVPBjC4gKGG/6WCig9U6WOV1W2hUsFL3UteqYGudNRtUMKNMljIgDzpYpYOVmRIeYQ4+LVqUcUVe5OIKe1izkkXY1+EbH5Zglr8B2PG0uFVpHkVEWmTZWvUK8Hm1aMzI5pceMEVc1rcb8SC45TQMe+wWNyrBgg/QZbJq4SnCjxwHRcJKpFmMhwQLbgeNyRZSgR8qZTMy55sxJwq0KUFEmkehEJFQDK9o4aRcwm2wwEN7LjWfz8uy+LU/i+6PRPV+PJeHTqe9fQoWz5IgSu31/7t9zGX1VsJMGJMvjVwnrbVzrVnRHqlePLO2PdTAZlfDxpSwLWewjRtD46HkDd54P7x0qiMpD2nawU+oEZ/cQnf47JGxGdgLaaqJIPTA2x7mz9MUAuA7IB6sJcLXAk0ctC/1v5/0M9BixJcUYQ572WtEs7ohhCueKtxZf/G7Q68zh35mT4vLYPdJv8dH4LpO+WaOXKwdYNPh3QenoorTc5ZvyWbqP5xwxG6qTUJlBKgp90BbwhcSGRuf3fl9+Nfn2R9+cn3JJz9NUQ9zWu6O9el3AFt0L81lAjrYDi9d+dRYYw6R8Qt0Hn9fj+JkSXfx9cSwgevT/Db3z50+bo+K8HhNqXk+qd657NGOhm6HRFzYQjFjUBJWyFDD0YJpOWLW5f5XZkbQcfOuX4KZE3WcZkufJOpaRsji3Nu6vh68thdHJB9oYteeZiFRTD/xLn7nLaWWh1XvDGXY1fWa7mJOR0da/sTRh+WBdvRZ2slauoHU1WCjHimUSFYJ+M1o8vLc68DgGJTEHpfqvJauuDqizPbO8k+Kgg7jWbEeYK+VmRh4TMRnnuEj99hhtuRF/OK40oBINKqpJlqoMuO2hT/WUGbOHxa4A0ebHfMeRTpuF30zIlZAbG62fF8BJnNatIRrgKbPwNpngAdZjoj8JSIiHY/LW5joextyx3+A9l11jL2TWnP6kKbI+xad4moiP5nZS2xOwl4zsNG3Mmh8U57E+1IF0905EHUnSu1Am70mGPIpkqWz4pJAexIfsrDuNJdXyluCbK7+011N73TWdPchXaWCxVoVt23unm6I21a30/cs7F8V0LyazN3eWAAAAABJRU5ErkJggg==', LOGO_BRT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAASCAAAAAAWSCP0AAAAeElEQVR42p2RQRLAIAgDN47//3J6qBRp1UM5MZJgSGQAEKNZVbshAu1B8jT2FlQ2+PDdmzkRBTScbK8WCZr0zFxWVBwYAVaIej/2MEnFAyN5UBzCDybtrvsF6uzucfYhJox3ppWhtGqgF/GYHoacA57c4wiqIj51AZG+Jx6XXgBtAAAAAElFTkSuQmCC';
-const FS = 'Arial,Helvetica,Roboto,sans-serif', FM = FS;   // niente monospace: sul telefono spesso non ha il grassetto
+const FS = 'Arial,Helvetica,sans-serif';
+const FM = '"Courier New",Courier,monospace';
 
 // ---------------------------------------------------------------- foglio di blocchi
 class Sheet {
@@ -122,7 +123,7 @@ function barcodeBlock(sh, bits, num, s) {
   const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb, [c, x] = sh.mk(L);
   x.fillStyle = '#000'; for (let i = 0; i < N; i++) if (bits[i]) x.fillRect(xb, (q + i) * s, T, s);
   x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
-  x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.strokeStyle = '#000'; x.lineWidth = Math.max(1.2, fs / 22); x.lineJoin = 'round'; x.strokeText(num, 0, 0); x.restore();
+  x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.restore();
   sh.blocks.push(c);
 }
 function dmBlock(sh, mods) {
@@ -145,8 +146,21 @@ async function getItems(page, vp, Util) {
   const tc = await page.getTextContent(), out = [];
   for (const it of tc.items) {
     if (!it.str || !it.str.trim()) continue;
-    const t = Util.transform(vp.transform, it.transform), size = Math.hypot(t[2], t[3]), vert = Math.abs(t[1]) > Math.abs(t[0]);
-    out.push({ s: it.str, x0: t[4], x1: t[4] + (vert ? 0 : it.width * vp.scale), cy: vert ? t[5] + Math.sign(t[1]) * it.width * vp.scale / 2 : t[5] - size * 0.3, size, vert, top: t[5] - size });
+    const t = Util.transform(vp.transform, it.transform),
+      size = Math.hypot(t[2], t[3]),
+      vert = Math.abs(t[1]) > Math.abs(t[0]);
+
+    out.push({
+      s: it.str,
+      x0: t[4],
+      x1: t[4] + (vert ? 0 : it.width * vp.scale),
+      cy: vert
+        ? t[5] + it.width * vp.scale / 2
+        : t[5] - size * 0.3,
+      size,
+      vert,
+      top: t[5] - size
+    });
   }
   return out;
 }
@@ -236,26 +250,112 @@ function binarize(c) {
 // Ritorna lista di etichette: [{kind, strips:[canvas1, canvas2]}] per ogni pagina riconosciuta del PDF
 export async function convertPdf(bytes, dep, opt = {}) {
   const module_ = opt.module || 4, { pdfjs } = dep, out = [];
-  const li = await dep.loadImage(LOGO_IN), lb = await dep.loadImage(LOGO_BRT);
-  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''] };
-  const doc = await pdfjs.getDocument({ data: bytes.slice(0), useSystemFonts: true }).promise;
+
+  const li = await dep.loadImage(LOGO_IN);
+  const lb = await dep.loadImage(LOGO_BRT);
+  const LG = {
+    A: [li, 64, 'ITALIA'],
+    B: [li, 64, 'ESTERO'],
+    C: [lb, 58, '']
+  };
+
+  const doc = await pdfjs.getDocument({
+    data: bytes.slice(0),
+    useSystemFonts: true
+  }).promise;
+
   for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p), v0 = page.getViewport({ scale: 1 });
-    let items = await getItems(page, v0, pdfjs.Util), txt = items.map(i => i.s).join(' ');
-    let kind = /DESTINATARIO/.test(txt) ? 'A' : /Receiver/.test(txt) ? 'B' : /Rif\.:/.test(txt) && /KG\./.test(txt) ? 'C' : null;
+    const page = await doc.getPage(p);
+    const v0 = page.getViewport({ scale: 1 });
+
+    let items = await getItems(page, v0, pdfjs.Util);
+    const txt = items.map(i => i.s).join(' ');
+
+    const kind = /DESTINATARIO/.test(txt)
+      ? 'A'
+      : /Receiver/.test(txt)
+        ? 'B'
+        : /Rif\.:/.test(txt) && /KG\./.test(txt)
+          ? 'C'
+          : null;
+
     if (!kind) continue;
-    const rot = kind === 'B' ? (page.rotate + 270) % 360 : page.rotate, vp = page.getViewport({ scale: 1, rotation: rot });
-    if (kind === 'B') items = await getItems(page, vp, pdfjs.Util);
-    const vps = page.getViewport({ scale: SC, rotation: rot }), gd = grabDark.bind(dep);
-    const d = kind === 'A' ? parseA(items) : kind === 'B' ? parseB(items) : parseC(items);
-    const bc = await gd(page, vps, kind === 'A' ? [70, 200, 235, 660] : kind === 'B' ? [540, 88, 790, 156] : [85, 165, 256, 252]);
-    const sh = new Sheet(PW, 1, dep), bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
-    if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
-    sh.logo(...LG[kind]); sh.rule(2, 3); barcodeBlock(sh, bits, d.numero, module_); sh.gap(14);
-    if (kind !== 'C') { const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]); dmBlock(sh, sampleDM(dm)); sh.gap(14); }
-    const s1 = sh.render(40), s2 = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40, LG[kind]);
-    out.push({ kind, strips: [binarize(s1), binarize(s2)] });
+
+    const rot = kind === 'B'
+      ? (page.rotate + 270) % 360
+      : page.rotate;
+
+    const vp = page.getViewport({ scale: 1, rotation: rot });
+
+    if (kind === 'B') {
+      items = await getItems(page, vp, pdfjs.Util);
+    }
+
+    const vps = page.getViewport({ scale: SC, rotation: rot });
+    const gd = grabDark.bind(dep);
+
+    const d = kind === 'A'
+      ? parseA(items)
+      : kind === 'B'
+        ? parseB(items)
+        : parseC(items);
+
+    const bc = await gd(
+      page,
+      vps,
+      kind === 'A'
+        ? [70, 200, 235, 660]
+        : kind === 'B'
+          ? [540, 88, 790, 156]
+          : [85, 165, 256, 252]
+    );
+
+    const sh = new Sheet(PW, 1, dep);
+    const bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
+
+    if (kind === 'C') {
+      d.numero = decode128(bits) ||
+        (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
+    }
+
+    // InPost: composizione originale.
+    // BRT: mantiene il logo e la linea.
+    if (kind === 'C') {
+      sh.logo(...LG[kind]);
+      sh.rule(2, 3);
+    }
+
+    barcodeBlock(sh, bits, d.numero, module_);
+    sh.gap(14);
+
+    if (kind !== 'C') {
+      const dm = await gd(
+        page,
+        vps,
+        kind === 'A'
+          ? [300, 527, 500, 662]
+          : [698, 340, 763, 412]
+      );
+
+      dmBlock(sh, sampleDM(dm));
+      sh.gap(14);
+    }
+
+    const s1 = sh.render(40);
+    const s2 = landStrip(
+      dep,
+      { A: detA, B: detB, C: detC }[kind],
+      d,
+      s1.height - 40,
+      LG[kind]
+    );
+
+    out.push({
+      kind,
+      strips: [binarize(s1), binarize(s2)]
+    });
   }
+
   return out;
 }
 export async function makePdf(canvases, dep) {
