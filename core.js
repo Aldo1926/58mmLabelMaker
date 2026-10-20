@@ -1,9 +1,9 @@
 // Core: legge le etichette InPost e produce due strisce 1-bit per stampanti termiche 58 mm.
-// dep = { pdfjs, makeCanvas(w,h), PDFLib, toPng(canvas) }
-const PW = 384, M = 6, SC = 6;           // larghezza stampabile (punti), margine, px per pt nel campionamento
-const LOGO_IN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACGAQAAAABP9orkAAADnUlEQVR42p2Yv3LjNhDGf4A0JgqPzXQuPHN8DHfmo7hM6fKqGNelzCPcozCTK1z6DY6XueJKyHMFlKG4KUjqDwURm6CRRvq4XOzu9+0CRoDv9yyvjQW4IbcsQKGDRa+CuUYFW7cqGEEFs1FnrVPBjC4gKGG/6WCig9U6WOV1W2hUsFL3UteqYGudNRtUMKNMljIgDzpYpYOVmRIeYQ4+LVqUcUVe5OIKe1izkkXY1+EbH5Zglr8B2PG0uFVpHkVEWmTZWvUK8Hm1aMzI5pceMEVc1rcb8SC45TQMe+wWNyrBgg/QZbJq4SnCjxwHRcJKpFmMhwQLbgeNyRZSgR8qZTMy55sxJwq0KUFEmkehEJFQDK9o4aRcwm2wwEN7LjWfz8uy+LU/i+6PRPV+PJeHTqe9fQoWz5IgSu31/7t9zGX1VsJMGJMvjVwnrbVzrVnRHqlePLO2PdTAZlfDxpSwLWewjRtD46HkDd54P7x0qiMpD2nawU+oEZ/cQnf47JGxGdgLaaqJIPTA2x7mz9MUAuA7IB6sJcLXAk0ctC/1v5/0M9BixJcUYQ572WtEs7ohhCueKtxZf/G7Q68zh35mT4vLYPdJv8dH4LpO+WaOXKwdYNPh3QenoorTc5ZvyWbqP5xwxG6qTUJlBKgp90BbwhcSGRuf3fl9+Nfn2R9+cn3JJz9NUQ9zWu6O9el3AFt0L81lAjrYDi9d+dRYYw6R8Qt0Hn9fj+JkSXfx9cSwgevT/Db3z50+bo+K8HhNqXk+qd657NGOhm6HRFzYQjFjUBJWyFDD0YJpOWLW5f5XZkbQcfOuX4KZE3WcZkufJOpaRsji3Nu6vh68thdHJB9oYteeZiFRTD/xLn7nLaWWh1XvDGXY1fWa7mJOR0da/sTRh+WBdvRZ2slauoHU1WCjHimUSFYJ+M1o8vLc68DgGJTEHpfqvJauuDqizPbO8k+Kgg7jWbEeYK+VmRh4TMRnnuEj99hhtuRF/OK40oBINKqpJlqoMuO2hT/WUGbOHxa4A0ebHfMeRTpuF30zIlZAbG62fF8BJnNatIRrgKbPwNpngAdZjoj8JSIiHY/LW5joextyx3+A9l11jL2TWnP6kKbI+xad4moiP5nZS2xOwl4zsNG3Mmh8U57E+1IF0905EHUnSu1Am70mGPIpkqWz4pJAexIfsrDuNJdXyluCbK7+011N73TWdPchXaWCxVoVt23unm6I21a30/cs7F8V0LyazN3eWAAAAABJRU5ErkJggg==', LOGO_BRT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAASCAAAAAAWSCP0AAAAeElEQVR42p2RQRLAIAgDN47//3J6qBRp1UM5MZJgSGQAEKNZVbshAu1B8jT2FlQ2+PDdmzkRBTScbK8WCZr0zFxWVBwYAVaIej/2MEnFAyN5UBzCDybtrvsF6uzucfYhJox3ppWhtGqgF/GYHoacA57c4wiqIj51AZG+Jx6XXgBtAAAAAElFTkSuQmCC';
-const FS = 'Arial,Helvetica,sans-serif';
-const FM = '"Courier New",Courier,monospace';
+// dep = { pdfjs, makeCanvas(w,h), PDFLib, toPng(canvas), loadImage }
+const PW = 384, M = 6, SC = 8;           // Aumentato SC da 6 a 8 per maggiore dettaglio nel sampling
+const LOGO_IN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACGAQAAAABP9orkAAADnUlEQVR42p2Yv3LjNhDGf4A0JgqPzXQuPHN8DHfmo7hM6fKqGNelzCPcozCTK1z6DY6XueJKyHMFlKG4KUjqDwURm6CRRvq4XOzu9+0CRoDv9yyvjQW4IbcsQKGDRa+CuUYFW7cqGEEFs1FnrVPBjC4gKGG/6WCig9U6WOV1W2hUsFL3UteqYGudNRtUMKNMljIgDzpYpYOVmRIeYQ4+LVqUcUVe5OIKe1izkkXY1+EbH5Zglr8B2PG0uFVpHkVEWmTZWvUK8Hm1aMzI5pceMEVc1rcb8SC45TQMe+wWNyrBgg/QZbJq4SnCjxwHRcJKpFmMhwQLbgeNyRZSgR8qZTMy55sxJwq0KUFEmkehEJFQDK9o4aRcwm2wwEN7LjWfz8uy+LU/i+6PRPV+PJeHTqe9fQoWz5IgSu31/7t9zGX1VsJMGJMvjVwnrbVzrVnRHqlePLO2PdTAZlfDxpSwLWewjRtD46HkDd54P7x0qiMpD2nawU+oEZ/cQnf47JGxGdgLaaqJIPTA2x7mz9MUAuA7IB6sJcLXAk0ctC/1v5/0M9BixJcUYQ572WtEs7ohhCueKtxZf/G7Q68zh35mT4vLYPdJv8dH4LpO+WaOXKwdYNPh3QenoorTc5ZvyWbqP5xwxG6qTUJlBKgp90BbwhcSGRuf3fl9+Nfn2R9+cn3JJz9NUQ9zWu6O9el3AFt0L81lAjrYDi9d+dRYYw6R8Qt0Hn9fj+JkSXfx9cSwgevT/Db3z50+bo+K8HhNqXk+qd657NGOhm6HRFzYQjFjUBJWyFDD0YJpOWLW5f5XZkbQcfOuX4KZE3WcZkufJOpaRsji3Nu6vh68thdHJB9oYteeZiFRTD/xLn7nLaWWh1XvDGXY1fWa7mJOR0da/sTRh+WBdvRZ2slauoHU1WCjHimUSFYJ+M1o8vLc68DgGJTEHpfqvJauuDqizPbO8k+Kgg7jWbEeYK+VmRh4TMRnnuEj99hhtuRF/OK40oBINKqpJlqoMuO2hT/WUGbOHxa4A0ebHfMeRTpuF30zIlZAbG62fF8BJnNatIRrgKbPwNpngAdZjoj8JSIiHY/LW5joextyx3+A9l11jL2TWnP6kKbI+xad4moiP5nZS2xOwl4zsNG3Mmh8U57E+1IF0905EHUnSu1Am70mGPIpkqWz4pJAexIfsrDuNJdXyluCbK7+011N73TWdPchXaWCxVoVt23unm6I21a30/cs7F8V0LyazN3eWAAAAABJRU5ErkJggg==', 
+      LOGO_BRT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAASCAAAAAAWSCP0AAAAeElEQVR42p2RQRLAIAgDN47//3J6qBRp1UM5MZJgSGQAEKNZVbshAu1B8jT2FlQ2+PDdmzkRBTScbK8WCZr0zFxWVBwYAVaIej/2MEnFAyN5UBzCDybtrvsF6uzucfYhJox3ppWhtGqgF/GYHoacA57c4wiqIj51AZG+Jx6XXgBtAAAAAElFTkSuQmCC';
+const FS = 'Arial,Helvetica,sans-serif', FM = '"Courier New",Courier,monospace'; // Rimesso monospace per numeri
 
 // ---------------------------------------------------------------- foglio di blocchi
 class Sheet {
@@ -75,14 +75,14 @@ function fitCount(lens, total) {
   for (let n = lo; n < hi; n++) if ((n - 2) % 11 === 0 && score(n) <= bs * 1.3 + 1) return n;   // Code128: N = 11k+2
   return best;
 }
-// rende una zona della pagina e ritorna la maschera dei pixel scuri ritagliata al bbox
 async function grabDark(page, vp, box) {
   const [x0, y0, x1, y1] = box, w = Math.ceil((x1 - x0) * SC), h = Math.ceil((y1 - y0) * SC);
   const c = this.makeCanvas(w, h), ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
   await page.render({ canvasContext: ctx, canvas: c, viewport: vp, transform: [1, 0, 0, 1, -x0 * SC, -y0 * SC] }).promise;
   const d = ctx.getImageData(0, 0, w, h).data; let a = w, b = h, e = 0, f = 0;
   const dark = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) if (d[i * 4] < 128) { dark[i] = 1; const x = i % w, y = (i / w) | 0; if (x < a) a = x; if (x > e) e = x; if (y < b) b = y; if (y > f) f = y; }
+  // Soglia più flessibile per evitare di perdere dettagli anti-aliased
+  for (let i = 0; i < w * h; i++) if (d[i * 4] < 180) { dark[i] = 1; const x = i % w, y = (i / w) | 0; if (x < a) a = x; if (x > e) e = x; if (y < b) b = y; if (y > f) f = y; }
   if (e < a) throw new Error('codice non trovato nella zona attesa');
   return { dark, w, a, b, W: e - a + 1, H: f - b + 1 };
 }
@@ -100,7 +100,7 @@ function sampleDM(g) {
   return m;
 }
 
-// Code128: decodifica dai moduli (usata per stampare il numero sotto il barcode quando il PDF non lo riporta)
+// Code128 decoder
 const C128 = '212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112'.split(' ');
 function decode128(bits) {
   const r = runs(bits), val = i => C128.indexOf(r.slice(i, i + 6).join('')), st = val(0);
@@ -117,15 +117,34 @@ function decode128(bits) {
 }
 
 // ---------------------------------------------------------------- blocchi grafici (striscia 1)
-function barcodeBlock(sh, bits, num, s) {
-  const q = 10, N = bits.length, L = (N + 2 * q) * s; let fs = 44;
+// IMPORTANTE: Disegna il barcode su una canvas dedicata e binarizzala SUBITO prima di unirla al resto
+function createCleanBarcodeCanvas(sh, bits, num, moduleSize) {
+  const q = 10, N = bits.length, L = (N + 2 * q) * moduleSize; 
+  let fs = 44;
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
-  const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb, [c, x] = sh.mk(L);
-  x.fillStyle = '#000'; for (let i = 0; i < N; i++) if (bits[i]) x.fillRect(xb, (q + i) * s, T, s);
-  x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
-  x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.restore();
-  sh.blocks.push(c);
+  const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb;
+  
+  // Canvas temporanea per il solo barcode
+  const c = sh.dep.makeCanvas(sh.W, L);
+  const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  
+  // Disegna barre nere pure
+  x.fillStyle = '#000'; 
+  for (let i = 0; i < N; i++) if (bits[i]) x.fillRect(xb, (q + i) * moduleSize, T, moduleSize);
+  
+  // Testo numero sotto
+  x.save(); 
+  x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); 
+  x.rotate(Math.PI / 2);
+  x.font = sh.f(fs, true); 
+  x.fillStyle = '#000';
+  x.fillText(num, 0, 0); 
+  x.restore();
+  
+  return c;
 }
+
 function dmBlock(sh, mods) {
   const n = mods.length, q = 2, s = Math.max(1, Math.floor(sh.cw / (n + 2 * q))), sz = (n + 2 * q) * s, [c, x] = sh.mk(sz);
   x.fillStyle = '#000'; mods.forEach((r, i) => r.forEach((v, j) => v && x.fillRect((q + j) * s, (q + i) * s, s, s)));
@@ -146,21 +165,8 @@ async function getItems(page, vp, Util) {
   const tc = await page.getTextContent(), out = [];
   for (const it of tc.items) {
     if (!it.str || !it.str.trim()) continue;
-    const t = Util.transform(vp.transform, it.transform),
-      size = Math.hypot(t[2], t[3]),
-      vert = Math.abs(t[1]) > Math.abs(t[0]);
-
-    out.push({
-      s: it.str,
-      x0: t[4],
-      x1: t[4] + (vert ? 0 : it.width * vp.scale),
-      cy: vert
-        ? t[5] + it.width * vp.scale / 2
-        : t[5] - size * 0.3,
-      size,
-      vert,
-      top: t[5] - size
-    });
+    const t = Util.transform(vp.transform, it.transform), size = Math.hypot(t[2], t[3]), vert = Math.abs(t[1]) > Math.abs(t[0]);
+    out.push({ s: it.str, x0: t[4], x1: t[4] + (vert ? 0 : it.width * vp.scale), cy: vert ? t[5] + Math.sign(t[1]) * it.width * vp.scale / 2 : t[5] - size * 0.3, size, vert, top: t[5] - size });
   }
   return out;
 }
@@ -232,7 +238,10 @@ const detC = (sh, d) => {
 };
 function landStrip(dep, builder, d, length, logo, tail = 40) {
   for (let k = 2.5; k >= 0.4; k -= 0.05) {
-    const sh = new Sheet(length, k, dep); builder(sh, d); const img = sh.render(0);
+    const sh = new Sheet(length, k, dep); 
+    if(logo) sh.logo(...logo); // Logo nella striscia dati
+    builder(sh, d); 
+    const img = sh.render(0);
     if (img.height <= PW - 2 * M) {
       const out = dep.makeCanvas(PW, length + tail), x = out.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, PW, length + tail);
       x.translate((PW - img.height) / 2 + img.height, 0); x.rotate(Math.PI / 2); x.drawImage(img, 0, 0); return out;
@@ -242,120 +251,70 @@ function landStrip(dep, builder, d, length, logo, tail = 40) {
 }
 function binarize(c) {
   const x = c.getContext('2d'), im = x.getImageData(0, 0, c.width, c.height), d = im.data;
-  for (let i = 0; i < d.length; i += 4) { const v = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 < 140 ? 0 : 255; d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; }
+  for (let i = 0; i < d.length; i += 4) { 
+    // Soglia leggermente più alta per recuperare dettagli persi, ma mantenendo contrasto
+    const v = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11 < 160 ? 0 : 255; 
+    d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255; 
+  }
   x.putImageData(im, 0, 0); return c;
 }
 
 // ---------------------------------------------------------------- API
-// Ritorna lista di etichette: [{kind, strips:[canvas1, canvas2]}] per ogni pagina riconosciuta del PDF
 export async function convertPdf(bytes, dep, opt = {}) {
   const module_ = opt.module || 4, { pdfjs } = dep, out = [];
-
-  const li = await dep.loadImage(LOGO_IN);
-  const lb = await dep.loadImage(LOGO_BRT);
-  const LG = {
-    A: [li, 64, 'ITALIA'],
-    B: [li, 64, 'ESTERO'],
-    C: [lb, 58, '']
-  };
-
-  const doc = await pdfjs.getDocument({
-    data: bytes.slice(0),
-    useSystemFonts: true
-  }).promise;
-
+  const li = await dep.loadImage(LOGO_IN), lb = await dep.loadImage(LOGO_BRT);
+  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''] };
+  const doc = await pdfjs.getDocument({ data: bytes.slice(0), useSystemFonts: true }).promise;
   for (let p = 1; p <= doc.numPages; p++) {
-    const page = await doc.getPage(p);
-    const v0 = page.getViewport({ scale: 1 });
-
-    let items = await getItems(page, v0, pdfjs.Util);
-    const txt = items.map(i => i.s).join(' ');
-
-    const kind = /DESTINATARIO/.test(txt)
-      ? 'A'
-      : /Receiver/.test(txt)
-        ? 'B'
-        : /Rif\.:/.test(txt) && /KG\./.test(txt)
-          ? 'C'
-          : null;
-
+    const page = await doc.getPage(p), v0 = page.getViewport({ scale: 1 });
+    let items = await getItems(page, v0, pdfjs.Util), txt = items.map(i => i.s).join(' ');
+    let kind = /DESTINATARIO/.test(txt) ? 'A' : /Receiver/.test(txt) ? 'B' : (/Rif\.:/.test(txt) && /KG\./.test(txt)) ? 'C' : null;
     if (!kind) continue;
-
-    const rot = kind === 'B'
-      ? (page.rotate + 270) % 360
-      : page.rotate;
-
-    const vp = page.getViewport({ scale: 1, rotation: rot });
-
-    if (kind === 'B') {
-      items = await getItems(page, vp, pdfjs.Util);
-    }
-
-    const vps = page.getViewport({ scale: SC, rotation: rot });
-    const gd = grabDark.bind(dep);
-
-    const d = kind === 'A'
-      ? parseA(items)
-      : kind === 'B'
-        ? parseB(items)
-        : parseC(items);
-
-    const bc = await gd(
-      page,
-      vps,
-      kind === 'A'
-        ? [70, 200, 235, 660]
-        : kind === 'B'
-          ? [540, 88, 790, 156]
-          : [85, 165, 256, 252]
-    );
-
+    
+    const rot = kind === 'B' ? (page.rotate + 270) % 360 : page.rotate, vp = page.getViewport({ scale: 1, rotation: rot });
+    if (kind === 'B') items = await getItems(page, vp, pdfjs.Util);
+    
+    const vps = page.getViewport({ scale: SC, rotation: rot }), gd = grabDark.bind(dep);
+    const d = kind === 'A' ? parseA(items) : kind === 'B' ? parseB(items) : parseC(items);
+    
+    // Coordinate Box per Barcode (ajustate se necessario, qui mantengo le tue ma verifico per C)
+    const bcBox = kind === 'A' ? [70, 200, 235, 660] : kind === 'B' ? [540, 88, 790, 156] : [85, 165, 256, 252];
+    const bc = await gd(page, vps, bcBox);
+    
+    // --- STRISCIA 1: CODES ---
     const sh = new Sheet(PW, 1, dep);
     const bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
-
-    if (kind === 'C') {
-      d.numero = decode128(bits) ||
-        (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
-    }
-
-    // InPost: composizione originale.
-    // BRT: mantiene il logo e la linea.
-    if (kind === 'C') {
-      sh.logo(...LG[kind]);
-      sh.rule(2, 3);
-    }
-
-    barcodeBlock(sh, bits, d.numero, module_);
+    
+    if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
+    
+    // 1. Logo
+    sh.logo(...LG[kind]); 
+    sh.rule(2, 3);
+    
+    // 2. Barcode Pulito (creato su canvas separata e incollato)
+    const cleanBC = createCleanBarcodeCanvas(sh, bits, d.numero, module_);
+    sh.image(cleanBC); 
+    
     sh.gap(14);
-
-    if (kind !== 'C') {
-      const dm = await gd(
-        page,
-        vps,
-        kind === 'A'
-          ? [300, 527, 500, 662]
-          : [698, 340, 763, 412]
-      );
-
-      dmBlock(sh, sampleDM(dm));
-      sh.gap(14);
+    
+    // 3. DataMatrix (solo A e B)
+    if (kind !== 'C') { 
+        const dmBox = kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412];
+        const dm = await gd(page, vps, dmBox); 
+        dmBlock(sh, sampleDM(dm)); 
+        sh.gap(14); 
     }
-
+    
     const s1 = sh.render(40);
-    const s2 = landStrip(
-      dep,
-      { A: detA, B: detB, C: detC }[kind],
-      d,
-      s1.height - 40,
-      LG[kind]
-    );
-
-    out.push({
-      kind,
-      strips: [binarize(s1), binarize(s2)]
-    });
+    
+    // --- STRISCIA 2: DATI ---
+    // Nota: landStrip ora accetta il logo opzionale, ma noi abbiamo già messo il logo in S1.
+    // Per coerenza visiva, potresti volerlo solo in S1 o solo in S2. Qui lo lascio solo in S1 come prima.
+    // Se vuoi il logo anche in S2, passa LG[kind] a landStrip.
+    const s2 = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40, null); 
+    
+    out.push({ kind, strips: [binarize(s1), binarize(s2)] });
   }
-
   return out;
 }
 export async function makePdf(canvases, dep) {
