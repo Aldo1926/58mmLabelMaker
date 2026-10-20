@@ -7,7 +7,8 @@ const FS = 'Arial,Helvetica,Roboto,sans-serif', FM = FS;
 // ---------------------------------------------------------------- foglio di blocchi
 class Sheet {
   constructor(W, k, dep) { this.W = W; this.k = k; this.dep = dep; this.cw = W - 2 * M; this.blocks = []; this.tmp = this.mk(10)[1]; }
-  mk(h, bg = '#fff') { const c = this.dep.makeCanvas(this.W, Math.max(1, Math.round(h))); const x = c.getContext('2d'); x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height); x.textBaseline = 'top'; return [c, x]; }
+  // FIX: imageSmoothingEnabled = false -> fillRect / drawImage senza anti-alias, barre pixel-perfect
+  mk(h, bg = '#fff') { const c = this.dep.makeCanvas(this.W, Math.max(1, Math.round(h))); const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height); x.textBaseline = 'top'; return [c, x]; }
   f(s, mono) { return `bold ${s}px ${mono ? FM : FS}`; }
   w(t, s, mono) { this.tmp.font = this.f(s, mono); return this.tmp.measureText(t).width; }
   wrap(t, s, mono, maxw) {
@@ -98,7 +99,6 @@ function sampleDM(g) {
   return m;
 }
 
-// Code128: decodifica dai moduli (usata per stampare il numero sotto il barcode quando il PDF non lo riporta)
 const C128 = '212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112'.split(' ');
 function decode128(bits) {
   const r = runs(bits), val = i => C128.indexOf(r.slice(i, i + 6).join('')), st = val(0);
@@ -119,7 +119,12 @@ function barcodeBlock(sh, bits, num, s) {
   const q = 10, N = bits.length, L = (N + 2 * q) * s; let fs = 44;
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
   const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb, [c, x] = sh.mk(L);
-  x.fillStyle = '#000'; for (let i = 0; i < N; i++) if (bits[i]) x.fillRect(xb, (q + i) * s, T, s);
+  x.fillStyle = '#000';
+  // FIX: coordinate intere, barre piene pixel-perfect
+  for (let i = 0; i < N; i++) if (bits[i]) {
+    const y = Math.round((q + i) * s);
+    x.fillRect(xb, y, T, Math.max(1, Math.round(s)));
+  }
   x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
   x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.strokeStyle = '#000'; x.lineWidth = Math.max(1.2, fs / 22); x.lineJoin = 'round'; x.strokeText(num, 0, 0); x.restore();
   sh.blocks.push(c);
@@ -231,12 +236,16 @@ function binarize(c) {
 }
 
 // ---------------------------------------------------------------- API
-// Ritorna lista di etichette: [{kind, strips:[canvas1, canvas2]}] per ogni pagina riconosciuta del PDF
 export async function convertPdf(bytes, dep, opt = {}) {
-  const module_ = opt.module || 4, { pdfjs } = dep, out = [];
+  // FIX: PW era 324 nella versione "perfetta", ora è 384 (corretto per 58mm / 203dpi).
+  // A parità di modulo le barre sono ~15% più sottili fisicamente -> sembrano sfocate.
+  // Compenso scalando il modulo (4 -> ~5) per riportare le barre alla larghezza fisica originale.
+  const baseMod = opt.module || 4;
+  const module_ = Math.max(3, Math.round(baseMod * 384 / 324));
+  const { pdfjs } = dep, out = [];
   const li = await dep.loadImage(LOGO_IN), lb = await dep.loadImage(LOGO_BRT);
-  // FIX: logo più piccolo così la striscia 1 torna a ~1024px (prima era perfetta a quella lunghezza)
-  const LG = { A: [li, 44, 'ITALIA'], B: [li, 44, 'ESTERO'], C: [lb, 40, ''] };
+  // FIX: logo BRT riportato a 58 come preferisci
+  const LG = { A: [li, 44, 'ITALIA'], B: [li, 44, 'ESTERO'], C: [lb, 58, ''] };
   const doc = await pdfjs.getDocument({ data: bytes.slice(0), useSystemFonts: true }).promise;
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p), v0 = page.getViewport({ scale: 1 });
@@ -251,16 +260,11 @@ export async function convertPdf(bytes, dep, opt = {}) {
     const sh = new Sheet(PW, 1, dep), bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
     if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
 
-    // FIX: misuro l'header (logo + riga) per NON farlo contare nella lunghezza passata a landStrip.
-    // Prima, il logo gonfiava s1.height → landStrip sceglieva un k più alto → testo ingrandito.
     sh.logo(...LG[kind]); sh.rule(2, 3);
     const headerH = sh.blocks.reduce((a, b) => a + b.height, 0);
     barcodeBlock(sh, bits, d.numero, module_); sh.gap(14);
     if (kind !== 'C') { const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]); dmBlock(sh, sampleDM(dm)); sh.gap(14); }
     const s1 = sh.render(40);
-
-    // FIX: la striscia dati riceve la lunghezza ORIGINALE (s1.height - 40 - headerH),
-    // e il tail compensa headerH così la striscia 2 resta lunga quanto la striscia 1.
     const s2 = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
 
     out.push({ kind, strips: [binarize(s1), binarize(s2)] });
