@@ -6,7 +6,9 @@ const dep = {
   makeCanvas: (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; },
   toPng: c => new Promise(r => c.toBlob(b => b.arrayBuffer().then(r), 'image/png')),
 };
-const toJpg = c => new Promise(r => c.toBlob(r, 'image/jpeg', 1));
+// FIX: le strisce sono 1-bit (solo 0/255 dopo binarize): il JPEG introduce ringing
+// attorno ai bordi netti e "sbianca" le barre. Usiamo PNG (anche più piccolo di un JPG a parità di 1-bit).
+const toPngBlob = c => new Promise(r => c.toBlob(r, 'image/png'));
 const $ = id => document.getElementById(id), out = $('out'), st = $('st'), results = [];
 const NAMES = { A: 'InPost Italia', B: 'InPost estero', C: 'BRT' };
 const get = n => document.querySelector(`input[name=${n}]:checked`).value;
@@ -28,9 +30,10 @@ async function run(inputs) {
       if (get('fmt') === 'pdf') {
         files.push([new File([await makePdf(labels.flatMap(l => l.strips), dep)], base + '_58mm.pdf', { type: 'application/pdf' }), 'Scarica PDF']);
       } else {
+        // FIX: PNG per entrambe le strisce (1-bit pulito, zero compression artifact sul barcode)
         for (let i = 0; i < labels.length; i++) for (let j = 0; j < 2; j++) {
           const tag = (labels.length > 1 ? '_et' + (i + 1) : '') + (j ? '_2_dati' : '_1_codici');
-          files.push([new File([await toJpg(labels[i].strips[j])], base + tag + '.jpg', { type: 'image/jpeg' }), j ? 'Scarica 2 · dati' : 'Scarica 1 · codici']);
+          files.push([new File([await toPngBlob(labels[i].strips[j])], base + tag + '.png', { type: 'image/png' }), j ? 'Scarica 2 · dati' : 'Scarica 1 · codici']);
         }
       }
       box.innerHTML = '<div class="badge"></div><h2></h2><div class="prev"></div><div class="btns"></div>';
