@@ -1,13 +1,12 @@
 // Core: legge le etichette InPost/BRT e produce due strisce 1-bit per stampanti termiche 58 mm.
 // dep = { pdfjs, makeCanvas(w,h), PDFLib, toPng(canvas), loadImage(src) }
-const PW = 384, M = 6, SC = 6;           // larghezza stampabile (punti), margine, px per pt nel campionamento
+const PW = 324, M = 6, SC = 6;           // FIX: PW=324 (era la larghezza della versione "perfetta")
 const LOGO_IN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACGAQAAAABP9orkAAADnUlEQVR42p2Yv3LjNhDGf4A0JgqPzXQuPHN8DHfmo7hM6fKqGNelzCPcozCTK1z6DY6XueJKyHMFlKG4KUjqDwURm6CRRvq4XOzu9+0CRoDv9yyvjQW4IbcsQKGDRa+CuUYFW7cqGEEFs1FnrVPBjC4gKGG/6WCig9U6WOV1W2hUsFL3UteqYGudNRtUMKNMljIgDzpYpYOVmRIeYQ4+LVqUcUVe5OIKe1izkkXY1+EbH5Zglr8B2PG0uFVpHkVEWmTZWvUK8Hm1aMzI5pceMEVc1rcb8SC45TQMe+wWNyrBgg/QZbJq4SnCjxwHRcJKpFmMhwQLbgeNyRZSgR8qZTMy55sxJwq0KUFEmkehEJFQDK9o4aRcwm2wwEN7LjWfz8uy+LU/i+6PRPV+PJeHTqe9fQoWz5IgSu31/7t9zGX1VsJMGJMvjVwnrbVzrVnRHqlePLO2PdTAZlfDxpSwLWewjRtD46HkDd54P7x0qiMpD2nawU+oEZ/cQnf47JGxGdgLaaqJIPTA2x7mz9MUAuA7IB6sJcLXAk0ctC/1v5/0M9BixJcUYQ572WtEs7ohhCueKtxZf/G7Q68zh35mT4vLYPdJv8dH4LpO+WaOXKwdYNPh3QenoorTc5ZvyWbqP5xwxG6qTUJlBKgp90BbwhcSGRuf3fl9+Nfn2R9+cn3JJz9NUQ9zWu6O9el3AFt0L81lAjrYDi9d+dRYYw6R8Qt0Hn9fj+JkSXfx9cSwgevT/Db3z50+bo+K8HhNqXk+qd657NGOhm6HRFzYQjFjUBJWyFDD0YJpOWLW5f5XZkbQcfOuX4KZE3WcZkufJOpaRsji3Nu6vh68thdHJB9oYteeZiFRTD/xLn7nLaWWh1XvDGXY1fWa7mJOR0da/sTRh+WBdvRZ2slauoHU1WCjHimUSFYJ+M1o8vLc68DgGJTEHpfqvJauuDqizPbO8k+Kgg7jWbEeYK+VmRh4TMRnnuEj99hhtuRF/OK40oBINKqpJlqoMuO2hT/WUGbOHxa4A0ebHfMeRTpuF30zIlZAbG62fF8BJnNatIRrgKbPwNpngAdZjoj8JSIiHY/LW5joextyx3+A9l11jL2TWnP6kKbI+xad4moiP5nZS2xOwl4zsNG3Mmh8U57E+1IF0905EHUnSu1Am70mGPIpkqWz4pJAexIfsrDuNJdXyluCbK7+011N73TWdPchXaWCxVoVt23unm6I21a30/cs7F8V0LyazN3eWAAAAABJRU5ErkJggg==', LOGO_BRT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAASCAAAAAAWSCP0AAAAeElEQVR42p2RQRLAIAgDN47//3J6qBRp1UM5MZJgSGQAEKNZVbshAu1B8jT2FlQ2+PDdmzkRBTScbK8WCZr0zFxWVBwYAVaIej/2MEnFAyN5UBzCDybtrvsF6uzucfYhJox3ppWhtGqgF/GYHoacA57c4wiqIj51AZG+Jx6XXgBtAAAAAElFTkSuQmCC';
 const FS = 'Arial,Helvetica,Roboto,sans-serif', FM = FS;
 
 // ---------------------------------------------------------------- foglio di blocchi
 class Sheet {
   constructor(W, k, dep) { this.W = W; this.k = k; this.dep = dep; this.cw = W - 2 * M; this.blocks = []; this.tmp = this.mk(10)[1]; }
-  // FIX: imageSmoothingEnabled = false -> fillRect / drawImage senza anti-alias, barre pixel-perfect
   mk(h, bg = '#fff') { const c = this.dep.makeCanvas(this.W, Math.max(1, Math.round(h))); const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.fillStyle = bg; x.fillRect(0, 0, c.width, c.height); x.textBaseline = 'top'; return [c, x]; }
   f(s, mono) { return `bold ${s}px ${mono ? FM : FS}`; }
   w(t, s, mono) { this.tmp.font = this.f(s, mono); return this.tmp.measureText(t).width; }
@@ -72,7 +71,7 @@ function fitCount(lens, total) {
   const score = n => { let s = 0; for (const l of lens) { const q = l / (total / n), r = Math.round(q); s += Math.abs(q - r) + (r < 1 ? 10 : 0); } return s; };
   let best = 0, bs = 1e9;
   for (let n = lo; n < hi; n++) { const s = score(n); if (s < bs - 1e-9) { best = n; bs = s; } }
-  for (let n = lo; n < hi; n++) if ((n - 2) % 11 === 0 && score(n) <= bs * 1.3 + 1) return n;   // Code128: N = 11k+2
+  for (let n = lo; n < hi; n++) if ((n - 2) % 11 === 0 && score(n) <= bs * 1.3 + 1) return n;
   return best;
 }
 async function grabDark(page, vp, box) {
@@ -120,7 +119,6 @@ function barcodeBlock(sh, bits, num, s) {
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
   const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb, [c, x] = sh.mk(L);
   x.fillStyle = '#000';
-  // FIX: coordinate intere, barre piene pixel-perfect
   for (let i = 0; i < N; i++) if (bits[i]) {
     const y = Math.round((q + i) * s);
     x.fillRect(xb, y, T, Math.max(1, Math.round(s)));
@@ -237,15 +235,13 @@ function binarize(c) {
 
 // ---------------------------------------------------------------- API
 export async function convertPdf(bytes, dep, opt = {}) {
-  // FIX: PW era 324 nella versione "perfetta", ora è 384 (corretto per 58mm / 203dpi).
-  // A parità di modulo le barre sono ~15% più sottili fisicamente -> sembrano sfocate.
-  // Compenso scalando il modulo (4 -> ~5) per riportare le barre alla larghezza fisica originale.
-  const baseMod = opt.module || 4;
-  const module_ = Math.max(3, Math.round(baseMod * 384 / 324));
+  // FIX: niente scaling del modulo. Module = valore scelto dall'utente (default 4).
+  // Con PW=324 e module=4 le barre stampate sono larghe come nella versione originale "perfetta".
+  const module_ = Math.max(3, opt.module || 4);
   const { pdfjs } = dep, out = [];
   const li = await dep.loadImage(LOGO_IN), lb = await dep.loadImage(LOGO_BRT);
-  // FIX: logo BRT riportato a 58 come preferisci
-  const LG = { A: [li, 44, 'ITALIA'], B: [li, 44, 'ESTERO'], C: [lb, 58, ''] };
+  // FIX: logo riportati alle dimensioni originali (A/B 64, BRT 58)
+  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''] };
   const doc = await pdfjs.getDocument({ data: bytes.slice(0), useSystemFonts: true }).promise;
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p), v0 = page.getViewport({ scale: 1 });
