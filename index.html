@@ -3,45 +3,74 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Etichette 58 mm</title>
+<title>58mm LabelMaker</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#14110f">
 <style>
-:root{--paper:#f4f1ea;--ink:#111;--mute:#6b675e;--line:#cfc9bb;--acc:#e8392b}
-@media(prefers-color-scheme:dark){:root{--paper:#17160f;--ink:#f1ede2;--mute:#9a958a;--line:#37342a}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 ui-monospace,"SF Mono",Menlo,Consolas,monospace;padding:env(safe-area-inset-top) 16px calc(24px + env(safe-area-inset-bottom))}
-main{max-width:560px;margin:0 auto}
-h1{font:800 34px/1 Arial Black,Arial,sans-serif;letter-spacing:-1px;margin:28px 0 6px;text-transform:uppercase}
-h1 span{color:var(--acc)}
-p.s{color:var(--mute);margin:0 0 22px;font-size:14px}
-.drop{display:block;border:2px dashed var(--ink);padding:30px 16px;text-align:center;cursor:pointer;font-weight:700}
+:root{--bg:#f3efe8;--card:#fffdf9;--ink:#1b1814;--mute:#7a7367;--line:#e3ddd0;--acc:#ff5a36;--accd:#d9401f;--shadow:0 1px 2px #0001,0 8px 24px -12px #0003}
+@media(prefers-color-scheme:dark){:root{--bg:#14110f;--card:#1e1b18;--ink:#f4efe6;--mute:#9b9488;--line:#332f2a;--shadow:0 1px 2px #0006,0 8px 24px -12px #000}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:max(20px,env(safe-area-inset-top)) 18px calc(40px + env(safe-area-inset-bottom))}
+main{max-width:620px;margin:0 auto}
+header{display:flex;align-items:center;gap:14px;margin:14px 0 10px}
+.logo{width:54px;height:54px;border-radius:15px;background:#14110f;display:grid;place-items:center;flex:none;box-shadow:var(--shadow)}
+h1{font-size:25px;line-height:1.1;margin:0;letter-spacing:-.5px}
+h1 b{color:var(--acc)}
+.sub{color:var(--mute);margin:0 0 20px;font-size:15px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 18px}
+.chips span{font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--card);border:1px solid var(--line);color:var(--mute)}
+.drop{display:block;text-align:center;padding:34px 18px;border:2px dashed var(--line);border-radius:22px;background:var(--card);cursor:pointer;transition:.15s;box-shadow:var(--shadow)}
+.drop.on,.drop:active{border-color:var(--acc);transform:scale(.99)}
 .drop input{display:none}
-.drop small{display:block;font-weight:400;color:var(--mute);margin-top:6px}
-.opt{display:flex;gap:10px;align-items:center;margin:14px 0;font-size:14px;color:var(--mute)}
-select{font:inherit;background:transparent;color:var(--ink);border:1px solid var(--line);padding:4px 6px}
-.item{border-top:2px solid var(--ink);padding:14px 0}
-.item h2{font-size:15px;margin:0 0 8px;word-break:break-all}
-.prev{display:flex;gap:8px;height:120px;overflow:hidden;margin-bottom:10px}
-.prev img{height:100%;border:1px solid var(--line);background:#fff;image-rendering:pixelated}
+.drop svg{display:block;margin:0 auto 10px}
+.drop strong{font-size:18px;display:block}
+.drop small{color:var(--mute)}
+.opts{display:grid;gap:14px;margin:18px 0;padding:16px;background:var(--card);border-radius:18px;box-shadow:var(--shadow)}
+.opt>span{display:block;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--mute);margin-bottom:7px}
+.seg{display:flex;background:var(--bg);border-radius:12px;padding:3px}
+.seg label{flex:1;text-align:center}
+.seg input{display:none}
+.seg span{display:block;padding:9px 4px;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;color:var(--mute)}
+.seg input:checked+span{background:var(--ink);color:var(--bg)}
+#st{min-height:24px;color:var(--mute);font-size:14px;text-align:center}
+.res{background:var(--card);border-radius:20px;padding:16px;margin:14px 0;box-shadow:var(--shadow);animation:up .3s ease}
+@keyframes up{from{opacity:0;transform:translateY(10px)}}
+.res h2{font-size:15px;margin:0 0 3px;word-break:break-all;font-weight:700}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--acc);color:#fff;margin-bottom:10px;letter-spacing:.3px}
+.prev{display:flex;gap:12px;justify-content:center;padding:14px;margin-bottom:12px;background:#0000000d;border-radius:14px;overflow:hidden}
+.prev img{height:170px;background:#fff;box-shadow:0 3px 10px #0004;border-radius:2px;image-rendering:pixelated}
 .btns{display:flex;gap:8px;flex-wrap:wrap}
-button,a.b{font-weight:700;font-size:14px;font-family:inherit;border:2px solid var(--ink);background:var(--ink);color:var(--paper);padding:10px 14px;text-decoration:none;cursor:pointer}
-button.g,a.g{background:transparent;color:var(--ink)}
-.err{color:var(--acc)}
-#st{color:var(--mute);font-size:14px;min-height:22px;margin-top:12px}
+button{font:inherit;font-weight:700;font-size:14px;border:0;border-radius:12px;padding:12px 16px;background:var(--acc);color:#fff;cursor:pointer;flex:1 1 auto;min-width:130px}
+button:active{background:var(--accd)}
+button.g{background:transparent;border:2px solid var(--line);color:var(--ink)}
+.err h2{color:var(--accd)}
+#all{width:100%;margin-top:6px}
+footer{text-align:center;color:var(--mute);font-size:12px;margin-top:26px}
 </style>
 </head>
 <body>
 <main>
-<h1>Etichette<br><span>58 mm</span></h1>
-<p class="s">Converte i PDF InPost in due strisce per stampante termica: barcode + DataMatrix, e dati in lungo. Tutto resta sul telefono, funziona anche offline.</p>
-<label class="drop"><input id="f" type="file" accept="application/pdf" multiple>Scegli uno o più PDF<small>oppure condividili qui da un'altra app</small></label>
-<div class="opt">Formato: <select id="fmt"><option value="jpg">2 immagini JPG</option><option value="pdf">PDF (2 pagine)</option></select></div>
-<div class="opt">Spessore barre: <select id="mod"><option value="4">4 (normale)</option><option value="5">5 (più grande)</option><option value="6">6 (enorme)</option></select></div>
+<header>
+  <div class="logo"><svg width="32" height="32" viewBox="0 0 32 32"><g fill="#f4efe6"><rect x="3" y="4" width="2" height="18"/><rect x="7" y="4" width="4" height="18"/><rect x="13" y="4" width="2" height="18"/><rect x="17" y="4" width="3" height="18"/><rect x="22" y="4" width="2" height="18"/><rect x="26" y="4" width="3" height="18"/></g><rect x="3" y="25" width="10" height="3" fill="#ff5a36"/><rect x="15" y="25" width="14" height="3" fill="#f4efe6"/></svg></div>
+  <h1>58mm <b>LabelMaker</b></h1>
+</header>
+<p class="sub">Trasforma le etichette dei corrieri in strisce grandi e leggibili per la stampante termica da scontrini. Tutto resta sul tuo dispositivo, funziona anche offline.</p>
+<div class="chips"><span>InPost Italia</span><span>InPost estero</span><span>BRT</span></div>
+
+<label class="drop" id="drop"><input id="f" type="file" accept="application/pdf" multiple>
+  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#ff5a36" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
+  <strong>Scegli i PDF delle etichette</strong><small>anche più file insieme, oppure trascinali qui</small></label>
+
+<div class="opts">
+  <div class="opt"><span>Formato di uscita</span><div class="seg" id="fmt"><label><input type="radio" name="fmt" value="jpg" checked><span>2 immagini JPG</span></label><label><input type="radio" name="fmt" value="pdf"><span>PDF</span></label></div></div>
+  <div class="opt"><span>Spessore barre del codice</span><div class="seg" id="mod"><label><input type="radio" name="mod" value="4" checked><span>Normale</span></label><label><input type="radio" name="mod" value="5"><span>Grande</span></label><label><input type="radio" name="mod" value="6"><span>Enorme</span></label></div></div>
+</div>
+
 <div id="st"></div>
 <div id="out"></div>
-<div class="item" id="all" hidden><div class="btns"><button id="dall">Scarica tutti i file</button></div></div>
+<button id="dall" class="g" hidden>Scarica tutti i file</button>
+<footer>Nessun file viene caricato online · versione 6</footer>
 </main>
 <script src="pdf-lib.min.js"></script>
 <script type="module" src="app.js"></script>
