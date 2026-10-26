@@ -255,8 +255,7 @@ export async function convertPdf(bytes, dep, opt = {}) {
     const bc = await gd(page, vps, kind === 'A' ? [70, 200, 235, 660] : kind === 'B' ? [540, 88, 790, 156] : [85, 165, 256, 252]);
     const sh = new Sheet(PW, 1, dep), bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
     if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
-    sh.logo(...LG[kind]); sh.rule(2, 3);
-    const headerH = sh.blocks.reduce((a, b) => a + b.height, 0);
+    sh.logo(...LG[kind]);
     const headerH = sh.blocks.reduce((a, b) => a + b.height, 0);
     barcodeBlock(sh, bits, d.numero, module_); sh.gap(14);
     if (kind !== 'C') { const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]); dmBlock(sh, sampleDM(dm)); sh.gap(14); }
