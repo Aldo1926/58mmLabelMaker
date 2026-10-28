@@ -266,6 +266,26 @@ export async function convertPdf(bytes, dep, opt = {}) {
   }
   return out;
 }
+export async function toA4(bytes, dep) {
+  const { PDFLib } = dep;
+  const src = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+  const out = await PDFLib.PDFDocument.create();
+  const A4 = [595.2756, 841.8898];               // A4 in punti PDF
+  for (const sp of src.getPages()) {
+    const ew = sp.getWidth(), eh = sp.getHeight();
+    const emb = await out.embedPage(sp);         // XObject della pagina originale
+    const pg = out.addPage(A4);
+    const sc = Math.min(A4[0] / ew, A4[1] / eh); // keep_proportion
+    const w = ew * sc, h = eh * sc;
+    pg.drawPage(emb, {
+      x: (A4[0] - w) / 2,
+      y: (A4[1] - h) / 2,
+      width: w,
+      height: h,
+    });
+  }
+  return out.save();                              // Uint8Array
+}
 export async function makePdf(canvases, dep) {
   const pdf = await dep.PDFLib.PDFDocument.create();
   for (const c of canvases) { const img = await pdf.embedPng(await dep.toPng(c)), pg = pdf.addPage([c.width * 72 / 203, c.height * 72 / 203]); pg.drawImage(img, { x: 0, y: 0, width: pg.getWidth(), height: pg.getHeight() }); }
