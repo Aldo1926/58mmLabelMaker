@@ -1,5 +1,5 @@
 import * as pdfjs from './pdf.min.mjs';
-import { convertPdf, makePdf } from './core.js';
+import { convertPdf, makePdf, toA4 } from './core.js';
 pdfjs.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 const dep = {
   pdfjs, PDFLib: window.PDFLib, loadImage: src => new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = src; }),
@@ -17,14 +17,30 @@ for (const n of ['fmt', 'mod']) {
   document.querySelectorAll(`input[name=${n}]`).forEach(i => i.onchange = () => localStorage.setItem(n, i.value));
 }
 function dl(f) { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
-
+async function convertAny(bytes, dep, opt) {
+  let firstErr = null;
+  try {
+    const labels = await convertPdf(bytes, dep, opt);
+    if (labels.length) return labels;
+  } catch (e) { firstErr = e; }
+  // Fallback: normalizza su A4 e riprova (risolve i PDF A6 tipo Vinted)
+  const fixed = await toA4(bytes, dep);
+  try {
+    const labels = await convertPdf(fixed, dep, opt);
+    if (labels.length) return labels;
+    throw new Error('nessuna etichetta riconosciuta');
+  } catch (e) {
+    if (firstErr) throw new Error(firstErr.message + ' | fallback A4: ' + e.message);
+    throw e;
+  }
+}
 async function run(inputs) {
   inputs = inputs.filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
   for (const file of inputs) {
     st.textContent = 'Elaboro ' + file.name + '…';
     const box = document.createElement('div'); box.className = 'res';
     try {
-      const labels = await convertPdf(new Uint8Array(await file.arrayBuffer()), dep, { module: +get('mod') });
+      const labels = await convertAny(new Uint8Array(await file.arrayBuffer()), dep, { module: +get('mod') });
       if (!labels.length) throw new Error('nessuna etichetta riconosciuta in questo PDF');
       const base = file.name.replace(/\.pdf$/i, ''), files = [];
       if (get('fmt') === 'pdf') {
