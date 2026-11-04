@@ -1,6 +1,6 @@
-// Core: legge le etichette InPost/BRT e produce strisce 1-bit per stampanti termiche 58 mm.
+// Core: legge le etichette InPost/BRT e produce due strisce 1-bit per stampanti termiche 58 mm.
 // dep = { pdfjs, makeCanvas(w,h), PDFLib, toPng(canvas), loadImage(src) }
-const PW = 324, M = 6, SC = 6;
+const PW = 324, M = 6, SC = 6;           // FIX: PW=324 (era la larghezza della versione "perfetta")
 const LOGO_IN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACGAQAAAABP9orkAAADnUlEQVR42p2Yv3LjNhDGf4A0JgqPzXQuPHN8DHfmo7hM6fKqGNelzCPcozCTK1z6DY6XueJKyHMFlKG4KUjqDwURm6CRRvq4XOzu9+0CRoDv9yyvjQW4IbcsQKGDRa+CuUYFW7cqGEEFs1FnrVPBjC4gKGG/6WCig9U6WOV1W2hUsFL3UteqYGudNRtUMKNMljIgDzpYpYOVmRIeYQ4+LVqUcUVe5OIKe1izkkXY1+EbH5Zglr8B2PG0uFVpHkVEWmTZWvUK8Hm1aMzI5pceMEVc1rcb8SC45TQMe+wWNyrBgg/QZbJq4SnCjxwHRcJKpFmMhwQLbgeNyRZSgR8qZTMy55sxJwq0KUFEmkehEJFQDK9o4aRcwm2wwEN7LjWfz8uy+LU/i+6PRPV+PJeHTqe9fQoWz5IgSu31/7t9zGX1VsJMGJMvjVwnrbVzrVnRHqlePLO2PdTAZlfDxpSwLWewjRtD46HkDd54P7x0qiMpD2nawU+oEZ/cQnf47JGxGdgLaaqJIPTA2x7mz9MUAuA7IB6sJcLXAk0ctC/1v5/0M9BixJcUYQ572WtEs7ohhCueKtxZf/G7Q68zh35mT4vLYPdJv8dH4LpO+WaOXKwdYNPh3QenoorTc5ZvyWbqP5xwxG6qTUJlBKgp90BbwhcSGRuf3fl9+Nfn2R9+cn3JJz9NUQ9zWu6O9el3AFt0L81lAjrYDi9d+dRYYw6R8Qt0Hn9fj+JkSXfx9cSwgevT/Db3z50+bo+K8HhNqXk+qd657NGOhm6HRFzYQjFjUBJWyFDD0YJpOWLW5f5XZkbQcfOuX4KZE3WcZkufJOpaRsji3Nu6vh68thdHJB9oYteeZiFRTD/xLn7nLaWWh1XvDGXY1fWa7mJOR0da/sTRh+WBdvRZ2slauoHU1WCjHimUSFYJ+M1o8vLc68DgGJTEHpfqvJauuDqizPbO8k+Kgg7jWbEeYK+VmRh4TMRnnuEj99hhtuRF/OK40oBINKqpJlqoMuO2hT/WUGbOHxa4A0ebHfMeRTpuF30zIlZAbG62fF8BJnNatIRrgKbPwNpngAdZjoj8JSIiHY/LW5joextyx3+A9l11jL2TWnP6kKbI+xad4moiP5nZS2xOwl4zsNG3Mmh8U57E+1IF0905EHUnSu1Am70mGPIpkqWz4pJAexIfsrDuNJdXyluCbK7+011N73TWdPchXaWCxVoVt23unm6I21a30/cs7F8V0LyazN3eWAAAAABJRU5ErkJggg==', LOGO_BRT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAASCAAAAAAWSCP0AAAAeElEQVR42p2RQRLAIAgDN47//3J6qBRp1UM5MZJgSGQAEKNZVbshAu1B8jT2FlQ2+PDdmzkRBTScbK8WCZr0zFxWVBwYAVaIej/2MEnFAyN5UBzCDybtrvsF6uzucfYhJox3ppWhtGqgF/GYHoacA57c4wiqIj51AZG+Jx6XXgBtAAAAAElFTkSuQmCC';
 const FS = 'Arial,Helvetica,Roboto,sans-serif', FM = FS;
 
@@ -113,8 +113,8 @@ function decode128(bits) {
   }
 }
 
-// ---------------------------------------------------------------- blocchi grafici
-function barcodeBlock(sh, bits, num, s, noNum = false) {
+// ---------------------------------------------------------------- blocchi grafici (striscia 1)
+function barcodeBlock(sh, bits, num, s) {
   const q = 10, N = bits.length, L = (N + 2 * q) * s; let fs = 44;
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
   const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb, [c, x] = sh.mk(L);
@@ -123,124 +123,14 @@ function barcodeBlock(sh, bits, num, s, noNum = false) {
     const y = Math.round((q + i) * s);
     x.fillRect(xb, y, T, Math.max(1, Math.round(s)));
   }
-  if (!noNum) {
-    x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
-    x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.strokeStyle = '#000'; x.lineWidth = Math.max(1.2, fs / 22); x.lineJoin = 'round'; x.strokeText(num, 0, 0); x.restore();
-  }
+  x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
+  x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.strokeStyle = '#000'; x.lineWidth = Math.max(1.2, fs / 22); x.lineJoin = 'round'; x.strokeText(num, 0, 0); x.restore();
   sh.blocks.push(c);
 }
 function dmBlock(sh, mods) {
   const n = mods.length, q = 2, s = Math.max(1, Math.floor(sh.cw / (n + 2 * q))), sz = (n + 2 * q) * s, [c, x] = sh.mk(sz);
   x.fillStyle = '#000'; mods.forEach((r, i) => r.forEach((v, j) => v && x.fillRect((q + j) * s, (q + i) * s, s, s)));
   sh.image(c);
-}
-
-function makeBarcodeStrip(sh, bits, topTexts, bottomText, s, bottomAlign = 'center') {
-  const q = 10, N = bits.length, L = (N + 2 * q) * s;
-  const T = 120;
-  const headerH = 30;
-  const footerH = 30;
-  const [c, x] = sh.mk(headerH + T + footerH + 20);
-  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-  x.fillStyle = '#000';
-  x.textBaseline = 'top';
-  
-  x.font = sh.f(24);
-  if (topTexts.left) x.fillText(topTexts.left, M, 0);
-  if (topTexts.center) x.fillText(topTexts.center, (sh.W - x.measureText(topTexts.center).width) / 2, 0);
-  if (topTexts.right) x.fillText(topTexts.right, sh.W - M - x.measureText(topTexts.right).width, 0);
-  
-  const xb = M + (sh.cw - L) / 2;
-  for (let i = 0; i < N; i++) if (bits[i]) {
-    const xi = Math.round(xb + (q + i) * s);
-    x.fillRect(xi, headerH, Math.max(1, Math.round(s)), T);
-  }
-  
-  if (bottomText) {
-    let fs = 20;
-    x.font = sh.f(fs);
-    let tw = x.measureText(bottomText).width;
-    while (tw > sh.cw && fs > 10) {
-      fs -= 1; x.font = sh.f(fs); tw = x.measureText(bottomText).width;
-    }
-    let tx = M;
-    if (bottomAlign === 'center') tx = (sh.W - tw) / 2;
-    else if (bottomAlign === 'right') tx = sh.W - M - tw;
-    x.fillText(bottomText, tx, headerH + T + 4);
-  }
-  sh.blocks.push(c);
-}
-
-function makeTwoColumnStrip(dep, col1, col2) {
-  for (let fs = 28; fs >= 14; fs -= 2) {
-    const lineH = Math.round(fs * 1.2);
-    const h1 = col1.length * lineH;
-    const h2 = col2.length * lineH;
-    
-    if (h1 <= PW/2 - M && h2 <= PW/2 - M) {
-      const L = Math.max(h1, h2) + 2 * M;
-      const c = dep.makeCanvas(L, PW);
-      const x = c.getContext('2d');
-      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-      x.fillStyle = '#000';
-      x.font = `bold ${fs}px Arial`;
-      x.textBaseline = 'top';
-      
-      let y = M;
-      for (const t of col1) { x.fillText(t, M, y); y += lineH; }
-      
-      y = Math.floor(PW/2) + M;
-      for (const t of col2) { x.fillText(t, M, y); y += lineH; }
-      
-      const out = dep.makeCanvas(PW, L);
-      const ox = out.getContext('2d');
-      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, L);
-      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
-      ox.drawImage(c, 0, 0);
-      return out;
-    }
-  }
-  return dep.makeCanvas(PW, 400);
-}
-
-function makeInfo2Strip(dep, info2) {
-  const { m1, m2, m3, m4, m5, m83 } = info2;
-  for (let fs = 28; fs >= 14; fs -= 2) {
-    const lineH = Math.round(fs * 1.2);
-    const rows = 7;
-    const L = rows * lineH + 2 * M;
-    const c = dep.makeCanvas(L, PW);
-    const x = c.getContext('2d');
-    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-    x.fillStyle = '#000';
-    x.font = `bold ${fs}px Arial`;
-    x.textBaseline = 'top';
-    
-    let y = M;
-    x.fillText(m1, M, y);
-    x.fillText(m2, L - M - x.measureText(m2).width, y);
-    y += lineH;
-    x.fillText('TRACK', M, y);
-    y += lineH;
-    x.fillText('SERVICE', M, y);
-    y += lineH;
-    x.fillText(m3, (L - x.measureText(m3).width)/2, y);
-    y += lineH;
-    x.fillText(m4, (L - x.measureText(m4).width)/2, y);
-    y += lineH;
-    x.fillText(m5, (L - x.measureText(m5).width)/2, y);
-    y += lineH;
-    x.fillText(m83, L - M - x.measureText(m83).width, y);
-    
-    const out = dep.makeCanvas(PW, L);
-    const ox = out.getContext('2d');
-    ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, L);
-    ox.translate(PW, 0);
-    ox.rotate(Math.PI / 2);
-    ox.drawImage(c, 0, 0);
-    return out;
-  }
-  return dep.makeCanvas(PW, 400);
 }
 
 // ---------------------------------------------------------------- lettura testo
@@ -258,7 +148,7 @@ async function getItems(page, vp, Util) {
   for (const it of tc.items) {
     if (!it.str || !it.str.trim()) continue;
     const t = Util.transform(vp.transform, it.transform), size = Math.hypot(t[2], t[3]), vert = Math.abs(t[1]) > Math.abs(t[0]);
-    out.push({ s: it.str, x0: t[4], x1: t[4] + (vert ? 0 : it.width * vp.scale), cy: vert ? t[5] + Math.sign(t[1]) * it.width * vp.scale / 2 : t[5] - size * 0.3, size, vert, top: t[5] - size, y: t[5] });
+    out.push({ s: it.str, x0: t[4], x1: t[4] + (vert ? 0 : it.width * vp.scale), cy: vert ? t[5] + Math.sign(t[1]) * it.width * vp.scale / 2 : t[5] - size * 0.3, size, vert, top: t[5] - size });
   }
   return out;
 }
@@ -303,62 +193,8 @@ function parseC(its) {
   [d.mitt, d.dest, d.ind, d.misure] = [col(0), col(1), col(2), col(3)];
   return d;
 }
-function parseD(its, vp) {
-  const hItems = its.filter(i => !i.vert);
-  const vItems = its.filter(i => i.vert);
-  
-  const vCols = [];
-  for (const it of vItems) {
-    let col = vCols.find(c => Math.abs(c.x - it.x0) < 15);
-    if (!col) { col = { x: it.x0, items: [] }; vCols.push(col); }
-    col.items.push(it);
-  }
-  vCols.sort((a,b) => a.x - b.x);
-  
-  const cleanStr = s => s && !/terms|conditions|dpd\.com|of\s+services|on\s+ww/i.test(s);
-  const safeTrim = s => (s || '').trim();
-  
-  const col1 = vCols[0] ? vCols[0].items.sort((a,b) => b.y - a.y).map(i => safeTrim(i.s)).filter(cleanStr) : [];
-  const col2 = vCols[1] ? vCols[1].items.sort((a,b) => b.y - a.y).map(i => safeTrim(i.s)).filter(cleanStr) : [];
-  
-  const item178 = hItems.find(i => /178/.test(i.s) && /287/.test(i.s) && /00/.test(i.s));
-  const item089 = hItems.find(i => /089287805386914005/.test(i.s));
-  const item83 = hItems.find(i => /83T20/.test(i.s));
-  const item0083 = hItems.find(i => /0083\s*340/.test(i.s));
-  
-  let bc1Zone = null, bc2Zone = null;
-  if (item178 && item089) {
-    const y0 = item178.cy + item178.size + 4;
-    const y1 = item089.cy - item089.size - 4;
-    if (y1 - y0 > 20) bc1Zone = [4, y0, vp.width - 4, y1];
-  }
-  if (item83 && item0083) {
-    const y0 = item83.cy + item83.size + 4;
-    const y1 = item0083.cy - item0083.size - 4;
-    if (y1 - y0 > 20) bc2Zone = [4, y0, vp.width - 4, y1];
-  }
-  
-  const allText = its.map(i => i.s || '').join(' ').replace(/\s+/g, ' ');
-  const getMatch = (re) => { const m = allText.match(re); return m ? (m[0] || '').trim() : ''; };
-  
-  const info2 = {
-    m1: getMatch(/0844\s+8881\s+2059\s+23/i) || '0844 8881 2059 23',
-    m2: 'P XD-B2C-PSD',
-    m3: getMatch(/FR-CHR-3429-ARC5/i) || 'FR-CHR-3429-ARC5',
-    m4: getMatch(/338-FR-83340/i) || '338-FR-83340',
-    m5: getMatch(/04\/11\/26\s+18:14\s+26110201/i) || '04/11/26 18:14 26110201',
-    m83: '83T20'
-  };
-  
-  return {
-    col1, col2,
-    bc1Zone, bc1Text: '178 287 00', bc1Track: '089287805386914005',
-    bc2Zone, bc2Text: '83T20', bc2Track: '0083 340 0844 8881 2059 23 338 901 C',
-    info2
-  };
-}
 
-// ---------------------------------------------------------------- striscia dati (in lungo)
+// ---------------------------------------------------------------- striscia 2 (dati in lungo)
 const detA = (sh, d) => {
   sh.cells([['DEPOSITO', d.deposito], ['GIRO', d.giro], ['PROV.', d.prov], ['DIM.', d.dimensioni], ['DATA ETICHETTA', d.data]], 64, [1.2, 1.5, 1, 0.8, 2.2]);
   sh.rule(2, 3); sh.text(d.nome, 40, { min: 20 }); sh.text(d.codice, 56, { min: 20, invert: true });
@@ -381,6 +217,50 @@ const detC = (sh, d) => {
   sh.text('MITTENTE: ' + (d.mitt[0] || '') + (d.mitt[1] ? ' (' + d.mitt[1] + ')' : ''), 26, { min: 16, lines: 2 });
   sh.text('RIF.: ' + d.rif, 30, { min: 16 });
 };
+// ---------------------------------------------------------------- tipo D: BRT estero (formato DPD, 2 codici a barre)
+function parseD(its) {
+  const h = its.filter(i => !i.vert), d = {}, S = i => i.s.trim();
+  const ln = (f, tol = 3) => lines(h.filter(f), tol).map(l => l.t);
+  d.dest = ln(i => i.x0 < 225 && i.cy > 150 && i.cy < 215);
+  d.contact = ln(i => i.x0 < 190 && i.cy > 215 && i.cy < 245).map(t => t.replace(/^Contact\s*/, '').replace(/^Phone\s*/, 'Tel. ')).filter(t => t && !/^Info$/.test(t));
+  d.rif = (h.find(i => i.size > 12 && i.x0 < 180 && i.cy > 255 && i.cy < 275) || {}).s || '';
+  d.colli = (h.find(i => /\bof\b/.test(i.s) && i.cy > 225 && i.cy < 245) || {}).s || '';
+  d.peso = (h.find(i => /\bkg\b/i.test(i.s) && i.cy > 250) || {}).s || '';
+  d.zona = h.filter(i => i.cy > 285 && i.cy < 305 && i.size > 12).sort((a, b) => a.x0 - b.x0).map(S).join(' | ');
+  d.num1 = (h.find(i => /^\d{15,}$/.test(S(i)) && i.cy > 340 && i.cy < 370) || {}).s || '';
+  d.track = ln(i => i.x0 < 200 && i.cy > 370 && i.cy < 385).join(' ');
+  d.service = (h.find(i => i.x0 > 240 && i.cy > 372 && i.cy < 386) || {}).s || '';
+  d.rotta = (h.find(i => i.size >= 20 && i.cy > 400 && i.cy < 425) || {}).s || '';
+  d.cod2 = (h.find(i => i.size >= 16 && i.size < 20 && i.cy > 425 && i.cy < 445) || {}).s || '';
+  d.via = (h.find(i => i.size >= 11 && i.size < 14 && i.cy > 420 && i.cy < 440) || {}).s || '';
+  d.data = (h.find(i => /^\d{2}\/\d{2}\/\d{2}/.test(S(i)) && i.cy > 425 && i.cy < 445) || {}).s || '';
+  d.num2 = (h.find(i => /^(\d+ )+\d*\s*\w?$/.test(S(i)) && i.cy > 510 && i.size >= 7) || {}).s || '';
+  d.mitt = its.filter(i => i.vert && i.x0 > 233 && i.x0 < 258).sort((a, b) => b.s.length - a.s.length).map(S);   // [nome mittente, provincia]
+  return d;
+}
+const detD = (sh, d) => {
+  sh.text(d.zona, 64, { min: 20, invert: true, align: 'center' });
+  sh.text([d.rotta, d.cod2].filter(Boolean).join('   '), 54, { min: 20 }); sh.rule(2, 3);
+  sh.text(d.dest.join(' - '), 46, { min: 26, lines: 3 });
+  sh.cells([['REFERENCES', d.rif], ['COLLI', d.colli], ['PESO', d.peso]], 52, [2, 1, 1]);
+  sh.text([d.via, d.service, d.data].filter(Boolean).join('  ·  '), 26, { min: 14, lines: 2 });
+  if (d.contact.length) sh.text('CONTATTO: ' + d.contact.join(', '), 28, { min: 16, lines: 2 });
+  if (d.mitt[0]) sh.text('MITTENTE: ' + d.mitt[0] + (d.mitt[1] ? ' (' + d.mitt[1] + ')' : ''), 26, { min: 16, lines: 2 });
+};
+async function buildD(page, items, dep, module_, LG) {
+  const vps = page.getViewport({ scale: SC, rotation: page.rotate }), gd = grabDark.bind(dep), d = parseD(items);
+  const b1 = sampleBarcode(await gd(page, vps, [58, 301.5, 224, 355]), 'x');
+  const b2 = sampleBarcode(await gd(page, vps, [60, 441, 310, 516]), 'x');
+  d.num1 = d.num1 || decode128(b1); d.num2 = d.num2 || decode128(b2);
+  const sh1 = new Sheet(PW, 1, dep); sh1.logo(...LG.D);
+  const headerH = sh1.blocks.reduce((a, b) => a + b.height, 0);
+  barcodeBlock(sh1, b1, d.num1, module_); sh1.gap(14);
+  const sh2 = new Sheet(PW, 1, dep); barcodeBlock(sh2, b2, d.num2, module_); sh2.gap(14);
+  const s1 = sh1.render(40), s2 = sh2.render(40), total = Math.max(s1.height, s2.height);
+  const len = Math.max(s1.height - headerH, s2.height) - 40;
+  const s3 = landStrip(dep, detD, d, len, LG.D, total - len);
+  return { kind: 'D', strips: [binarize(s1), binarize(s2), binarize(s3)], names: ['_1_codice_brt', '_2_codice_dpd', '_3_dati'] };
+}
 
 function landStrip(dep, builder, d, length, logo, tail = 40) {
   for (let k = 2.5; k >= 0.4; k -= 0.05) {
@@ -400,110 +280,58 @@ function binarize(c) {
 
 // ---------------------------------------------------------------- API
 export async function convertPdf(bytes, dep, opt = {}) {
+  // FIX: niente scaling del modulo. Module = valore scelto dall'utente (default 4).
+  // Con PW=324 e module=4 le barre stampate sono larghe come nella versione originale "perfetta".
   const module_ = Math.max(3, opt.module || 4);
   const { pdfjs } = dep, out = [];
   const li = await dep.loadImage(LOGO_IN), lb = await dep.loadImage(LOGO_BRT);
-  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''], D: [lb, 58, ''] };
+  // FIX: logo riportati alle dimensioni originali (A/B 64, BRT 58)
+  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''], D: [lb, 58, 'ESTERO'] };
   const doc = await pdfjs.getDocument({ data: bytes.slice(0), useSystemFonts: true }).promise;
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p), v0 = page.getViewport({ scale: 1 });
     let items = await getItems(page, v0, pdfjs.Util), txt = items.map(i => i.s).join(' ');
-    let kind = /DESTINATARIO/.test(txt) ? 'A'
-      : /Receiver/.test(txt) ? 'B'
-      : /Rif\.:/.test(txt) && /KG\./.test(txt) ? 'C'
-      : /References:/.test(txt) && /TRACK/.test(txt) ? 'D'
-      : null;
+    let kind = /DESTINATARIO/.test(txt) ? 'A' : /Receiver/.test(txt) ? 'B' : /Rif\.:/.test(txt) && /KG\./.test(txt) ? 'C' : /Delivery Address/.test(txt) && /Packages/.test(txt) ? 'D' : null;
+    if (kind === 'D') { out.push(await buildD(page, items, dep, module_, LG)); continue; }
     if (!kind) continue;
     const rot = kind === 'B' ? (page.rotate + 270) % 360 : page.rotate, vp = page.getViewport({ scale: 1, rotation: rot });
     if (kind === 'B') items = await getItems(page, vp, pdfjs.Util);
     const vps = page.getViewport({ scale: SC, rotation: rot }), gd = grabDark.bind(dep);
-    const d = kind === 'A' ? parseA(items)
-            : kind === 'B' ? parseB(items)
-            : kind === 'C' ? parseC(items)
-            : parseD(items, vp);
-
-    // ---- BRT Estero ----
-    if (kind === 'D') {
-      const strips = [];
-      
-      // Info 1
-      if (d.col1.length || d.col2.length) {
-        const c = makeTwoColumnStrip(dep, d.col1, d.col2);
-        strips.push(binarize(c));
-      }
-      
-      // Barcode 1
-      if (d.bc1Zone) {
-        const bc1 = await gd(page, vps, d.bc1Zone);
-        const bits1 = sampleBarcode(bc1, 'x');
-        const num1 = d.bc1Track || decode128(bits1) || '';
-        const maxS = Math.floor((PW - 2*M) / (bits1.length + 20));
-        const s1Eff = Math.min(module_, Math.max(2, maxS));
-        const sh = new Sheet(PW, 1, dep);
-        makeBarcodeStrip(sh, bits1, { left: '178', center: '287', right: '00' }, num1, s1Eff, 'center');
-        strips.push(binarize(sh.render(20)));
-      }
-      
-      // Info 2
-      if (d.info2) {
-        const c = makeInfo2Strip(dep, d.info2);
-        strips.push(binarize(c));
-      }
-      
-      // Barcode 2
-      if (d.bc2Zone) {
-        const bc2 = await gd(page, vps, d.bc2Zone);
-        const bits2 = sampleBarcode(bc2, 'x');
-        const num2 = d.bc2Track || decode128(bits2) || '';
-        const maxS = Math.floor((PW - 2*M) / (bits2.length + 20));
-        const s2Eff = Math.min(module_, Math.max(2, maxS));
-        const sh = new Sheet(PW, 1, dep);
-        makeBarcodeStrip(sh, bits2, { right: d.bc2Text || '83T20' }, num2, s2Eff, 'left');
-        strips.push(binarize(sh.render(20)));
-      }
-      
-      out.push({ kind, strips });
-      continue;
-    }
-
-    // ---- A / B / C ----
-    const bcBox = kind === 'A' ? [70, 200, 235, 660]
-                : kind === 'B' ? [540, 88, 790, 156]
-                : [85, 165, 256, 252];
-    const bc = await gd(page, vps, bcBox);
+    const d = kind === 'A' ? parseA(items) : kind === 'B' ? parseB(items) : parseC(items);
+    const bc = await gd(page, vps, kind === 'A' ? [70, 200, 235, 660] : kind === 'B' ? [540, 88, 790, 156] : [85, 165, 256, 252]);
     const sh = new Sheet(PW, 1, dep), bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
     if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
-
     sh.logo(...LG[kind]);
     const headerH = sh.blocks.reduce((a, b) => a + b.height, 0);
     barcodeBlock(sh, bits, d.numero, module_); sh.gap(14);
-    if (kind === 'A' || kind === 'B') {
-      const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]);
-      dmBlock(sh, sampleDM(dm)); sh.gap(14);
-    }
+    if (kind !== 'C') { const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]); dmBlock(sh, sampleDM(dm)); sh.gap(14); }
     const s1 = sh.render(40);
-    const sData = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
-    out.push({ kind, strips: [binarize(s1), binarize(sData)] });
+    const s2 = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
+
+    out.push({ kind, strips: [binarize(s1), binarize(s2)] });
   }
   return out;
 }
-
 export async function toA4(bytes, dep) {
   const { PDFLib } = dep;
   const src = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
   const out = await PDFLib.PDFDocument.create();
-  const A4 = [595.2756, 841.8898];
+  const A4 = [595.2756, 841.8898];               // A4 in punti PDF
   for (const sp of src.getPages()) {
     const ew = sp.getWidth(), eh = sp.getHeight();
-    const emb = await out.embedPage(sp);
+    const emb = await out.embedPage(sp);         // XObject della pagina originale
     const pg = out.addPage(A4);
-    const sc = Math.min(A4[0] / ew, A4[1] / eh);
+    const sc = Math.min(A4[0] / ew, A4[1] / eh); // keep_proportion
     const w = ew * sc, h = eh * sc;
-    pg.drawPage(emb, { x: (A4[0] - w) / 2, y: (A4[1] - h) / 2, width: w, height: h });
+    pg.drawPage(emb, {
+      x: (A4[0] - w) / 2,
+      y: (A4[1] - h) / 2,
+      width: w,
+      height: h,
+    });
   }
-  return out.save();
+  return out.save();                              // Uint8Array
 }
-
 export async function makePdf(canvases, dep) {
   const pdf = await dep.PDFLib.PDFDocument.create();
   for (const c of canvases) { const img = await pdf.embedPng(await dep.toPng(c)), pg = pdf.addPage([c.width * 72 / 203, c.height * 72 / 203]); pg.drawImage(img, { x: 0, y: 0, width: pg.getWidth(), height: pg.getHeight() }); }
