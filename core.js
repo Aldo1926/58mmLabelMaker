@@ -113,7 +113,7 @@ function decode128(bits) {
   }
 }
 
-// ---------------------------------------------------------------- blocchi grafici (striscia codici)
+// ---------------------------------------------------------------- blocchi grafici
 function barcodeBlock(sh, bits, num, s) {
   const q = 10, N = bits.length, L = (N + 2 * q) * s; let fs = 44;
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
@@ -194,67 +194,58 @@ function parseC(its) {
   return d;
 }
 function parseD(its, vp) {
-  const h = its.filter(i => !i.vert), d = {};
-  const sorted = [...h].sort((a, b) => a.cy - b.cy);
+  const h = its.filter(i => !i.vert);
+  const sorted = [...h].sort((a, b) => a.cy - b.cy || a.x0 - b.x0);
   const lineArr = [];
   for (const it of sorted) {
     const last = lineArr[lineArr.length - 1];
     if (last && Math.abs(it.cy - last.cy) < 5) last.items.push(it);
-    else lineArr.push({ cy: it.cy, items: [it] });
+    else lineArr.push({ cy: it.cy, top: it.top, items: [it] });
   }
-  const lineTxt = l => l.items.slice().sort((a, b) => a.x0 - b.x0).map(i => i.s.trim()).join(' ').trim();
-  const findItem = re => h.find(i => re.test(i.s.trim()));
-  const lineOf = item => item ? lineArr.find(l => Math.abs(l.cy - item.cy) < 5) : null;
-
-  d.luogo = lineArr[0] ? lineTxt(lineArr[0]) : '';
-  d.paese = lineArr[1] ? lineTxt(lineArr[1]) : '';
-
-  const contact = findItem(/^Contact\b/i);
-  d.contatto = contact ? (lineOf(contact) ? lineTxt(lineOf(contact)) : contact.s.trim()).replace(/^Contact\s*/i, '').trim() : '';
-
-  const ref = findItem(/^References?:/i);
-  d.rif = ref ? (lineOf(ref) ? lineTxt(lineOf(ref)) : ref.s.trim()).replace(/^References?:\s*/i, '').trim() : '';
-
-  const track = findItem(/^\d{15,20}$/);
-  d.numero = track ? track.s.trim() : '';
-
-  const routing = h.filter(i => /^\d{2,3}$/.test(i.s.trim()) && i.size >= 14
-    && (!ref || i.cy > ref.cy + 2) && (!track || i.cy < track.cy - 2));
-  d.routing = routing.sort((a, b) => a.x0 - b.x0).map(i => i.s.trim()).join(' ');
-
-  const ref2 = findItem(/TRACK/i);
-  d.ref2 = ref2 ? (lineOf(ref2) ? lineTxt(lineOf(ref2)) : ref2.s.trim()) : '';
-
-  const serv = findItem(/B2C|PSD/i);
-  d.servizio = serv ? (lineOf(serv) ? lineTxt(lineOf(serv)) : serv.s.trim()) : '';
-
-  d.sort = h.filter(i => /^[A-Z0-9]{2,4}-/.test(i.s.trim()) && (!track || i.cy > track.cy))
-    .sort((a, b) => a.cy - b.cy || a.x0 - b.x0).map(i => i.s.trim());
-
-  const data = findItem(/^\d{2}\/\d{2}\/\d{2,4}\s+\d{2}:\d{2}/);
-  d.data = data ? data.s.trim() : '';
-
-  const cod2 = h.find(i => /^[A-Z0-9]{4,6}$/.test(i.s.trim()) && (!data || i.cy > data.cy + 2));
-  d.codice2 = cod2 ? cod2.s.trim() : '';
-
-  // BC1 zone: fra i box routing e il testo del tracking
-  if (track) {
-    const y1 = track.top - 4;
-    const y0 = routing.length ? Math.max(...routing.map(r => r.cy + r.size)) + 8 : y1 - 120;
-    const xMin = Math.max(0, (routing.length ? Math.min(...routing.map(r => r.x0)) : track.x0) - 30);
-    const xMax = Math.min(vp.width, (routing.length ? Math.max(...routing.map(r => r.x1)) : track.x1) + 30);
-    d.bcZone = [xMin, y0, xMax, y1];
+  for (const l of lineArr) {
+    l.items.sort((a, b) => a.x0 - b.x0);
+    l.t = l.items.map(i => i.s.trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    l.size = Math.max(...l.items.map(i => i.size));
   }
 
-  // BC2 zone: fra il codice2 ("83T20") e il testo human-readable in fondo
-  const bottomHuman = h.find(i => /^\d+\s+\d+\s+\d+/.test(i.s.trim()) && (!cod2 || i.cy > cod2.cy + 2) && (!data || i.cy > data.cy + 2));
-  d.bc2Human = bottomHuman ? bottomHuman.s.trim() : '';
-  if (cod2 && vp) {
-    const y0 = cod2.top + cod2.size + 6;
-    const y1 = bottomHuman ? bottomHuman.top - 2 : vp.height - 4;
-    d.bc2Zone = [8, y0, vp.width - 8, y1];
+  // Ancore
+  const lineTracking = lineArr.find(l => /^\d{15,20}$/.test(l.t));
+  const line178 = lineTracking ? [...lineArr].reverse().find(l =>
+    l.cy < lineTracking.cy && /^\d{2,4}(\s+\d{2,4}){1,3}$/.test(l.t)) : null;
+  const line83 = [...lineArr].reverse().find(l =>
+    /^[A-Z0-9]{4,6}$/.test(l.t) && (!lineTracking || l.cy > lineTracking.cy + 4));
+  const line0083 = line83 ? lineArr.find(l =>
+    l.cy > line83.cy && /^\d[\d\sA-Z]{10,}$/.test(l.t)) : null;
+
+  // Zone barcode
+  let bc1Zone = null, bc2Zone = null;
+  if (lineTracking) {
+    const y1 = lineTracking.top - 2;
+    const y0 = line178 ? line178.cy + line178.size + 4 : Math.max(0, y1 - 150);
+    if (y1 - y0 > 30) bc1Zone = [4, y0, vp.width - 4, y1];
   }
-  return d;
+  if (line83) {
+    const y0 = line83.cy + line83.size + 4;
+    const y1 = line0083 ? line0083.top - 2 : vp.height - 4;
+    if (y1 - y0 > 30) bc2Zone = [4, y0, vp.width - 4, y1];
+  }
+
+  // Sezioni info
+  const bc1Start = line178 ? line178.cy - 1 : (lineTracking ? lineTracking.top - 150 : vp.height * 0.3);
+  const topLines = lineArr.filter(l => l.cy < bc1Start).map(l => l.t);
+
+  const midStart = lineTracking ? lineTracking.cy + 2 : -1;
+  const midEnd = line83 ? line83.cy - 2 : vp.height;
+  const midLines = lineArr.filter(l => l.cy > midStart && l.cy < midEnd).map(l => l.t);
+
+  return {
+    bc1Zone, bc2Zone,
+    bc1Human: line178 ? line178.t : '',
+    bc1Tracking: lineTracking ? lineTracking.t : '',
+    bc2Human: line83 ? line83.t : '',
+    bc2Human2: line0083 ? line0083.t : '',
+    topLines, midLines
+  };
 }
 
 // ---------------------------------------------------------------- striscia dati (in lungo)
@@ -279,19 +270,6 @@ const detC = (sh, d) => {
   sh.cells([['COLLI', d.misure[1]], ['PESO', (d.misure[2] || '').replace('KG.', '').trim() + ' kg'], ['VOLUME', (d.misure[0] || '').replace('MC.', '').trim() + ' mc'], ['DATA', d.data]], 40);
   sh.text('MITTENTE: ' + (d.mitt[0] || '') + (d.mitt[1] ? ' (' + d.mitt[1] + ')' : ''), 26, { min: 16, lines: 2 });
   sh.text('RIF.: ' + d.rif, 30, { min: 16 });
-};
-const detD = (sh, d) => {
-  if (d.luogo) sh.text(d.luogo, 64, { min: 24, invert: true });
-  if (d.paese) sh.text(d.paese, 44, { min: 20 });
-  sh.rule(2, 3);
-  if (d.contatto) sh.text('CONTATTO: ' + d.contatto, 30, { min: 18, lines: 2 });
-  if (d.rif) sh.text('RIF.: ' + d.rif, 32, { min: 18, lines: 2 });
-  if (d.ref2) sh.text(d.ref2, 30, { min: 16 });
-  if (d.servizio) sh.text(d.servizio, 30, { min: 16 });
-  sh.rule(2, 3);
-  if (d.sort.length) sh.text(d.sort.join('  |  '), 32, { min: 18, lines: 2 });
-  if (d.data) sh.text(d.data, 30, { min: 16 });
-  if (d.codice2) sh.text('COD: ' + d.codice2, 30, { min: 16 });
 };
 
 function landStrip(dep, builder, d, length, logo, tail = 40) {
@@ -334,44 +312,72 @@ export async function convertPdf(bytes, dep, opt = {}) {
             : kind === 'C' ? parseC(items)
             : parseD(items, vp);
 
+    // ---- BRT Estero: 4 strisce (info / BC1 / info / BC2) ----
+    if (kind === 'D') {
+      const strips = [];
+
+      // Strip 0: info sopra il primo barcode
+      {
+        const sh = new Sheet(PW, 1, dep);
+        for (const t of d.topLines) sh.text(t, 32, { min: 15, lines: 3 });
+        strips.push(binarize(sh.render(20)));
+      }
+
+      // Strip 1: BC1 (178 287 00 + barcode + tracking)
+      if (d.bc1Zone) {
+        const bc1 = await gd(page, vps, d.bc1Zone);
+        const bits1 = sampleBarcode(bc1, 'x');
+        const num1 = d.bc1Tracking || decode128(bits1) || '';
+        const s1Eff = Math.min(module_, Math.max(2, Math.floor(1000 / (bits1.length + 20))));
+        const sh = new Sheet(PW, 1, dep);
+        if (d.bc1Human) sh.text(d.bc1Human, 36, { min: 18, align: 'center' });
+        barcodeBlock(sh, bits1, num1, s1Eff);
+        if (d.bc1Tracking) sh.text(d.bc1Tracking, 26, { min: 14, align: 'center' });
+        strips.push(binarize(sh.render(20)));
+      }
+
+      // Strip 2: info tra BC1 e BC2
+      {
+        const sh = new Sheet(PW, 1, dep);
+        for (const t of d.midLines) sh.text(t, 30, { min: 15, lines: 2 });
+        strips.push(binarize(sh.render(20)));
+      }
+
+      // Strip 3: BC2 (83T20 + barcode + 0083 340…)
+      if (d.bc2Zone) {
+        const bc2 = await gd(page, vps, d.bc2Zone);
+        const bits2 = sampleBarcode(bc2, 'x');
+        const num2 = d.bc2Human2 || decode128(bits2) || '';
+        const s2Eff = Math.min(module_, Math.max(2, Math.floor(1000 / (bits2.length + 20))));
+        const sh = new Sheet(PW, 1, dep);
+        if (d.bc2Human) sh.text(d.bc2Human, 36, { min: 18, align: 'center' });
+        barcodeBlock(sh, bits2, num2, s2Eff);
+        if (d.bc2Human2) sh.text(d.bc2Human2, 24, { min: 14, align: 'center' });
+        strips.push(binarize(sh.render(20)));
+      }
+
+      out.push({ kind, strips });
+      continue;
+    }
+
+    // ---- A / B / C: percorso comune ----
     const bcBox = kind === 'A' ? [70, 200, 235, 660]
                 : kind === 'B' ? [540, 88, 790, 156]
-                : kind === 'C' ? [85, 165, 256, 252]
-                : d.bcZone;
-    if (!bcBox) throw new Error('BRT Estero: zona barcode non rilevata (routing/tracking non trovati)');
+                : [85, 165, 256, 252];
     const bc = await gd(page, vps, bcBox);
     const sh = new Sheet(PW, 1, dep), bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
     if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
-    if (kind === 'D' && !d.numero) d.numero = decode128(bits) || '';
 
     sh.logo(...LG[kind]);
     const headerH = sh.blocks.reduce((a, b) => a + b.height, 0);
     barcodeBlock(sh, bits, d.numero, module_); sh.gap(14);
-
-    let bc2Sheet = null;
     if (kind === 'A' || kind === 'B') {
       const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]);
       dmBlock(sh, sampleDM(dm)); sh.gap(14);
-    } else if (kind === 'D' && d.bc2Zone) {
-      const bc2 = await gd(page, vps, d.bc2Zone);
-      const bits2 = sampleBarcode(bc2, 'x');
-      const num2 = decode128(bits2) || (d.bc2Human || '').replace(/\s/g, '');
-      bc2Sheet = new Sheet(PW, 1, dep);
-      barcodeBlock(bc2Sheet, bits2, num2, module_); bc2Sheet.gap(14);
     }
-
     const s1 = sh.render(40);
-    const strips = [binarize(s1)];
-
-    if (kind === 'D' && bc2Sheet) {
-      const curH = bc2Sheet.blocks.reduce((a, b) => a + b.height, 0);
-      strips.push(binarize(bc2Sheet.render(Math.max(0, s1.height - curH))));
-    }
-
-    const sData = landStrip(dep, { A: detA, B: detB, C: detC, D: detD }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
-    strips.push(binarize(sData));
-
-    out.push({ kind, strips });
+    const sData = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
+    out.push({ kind, strips: [binarize(s1), binarize(sData)] });
   }
   return out;
 }
