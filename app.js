@@ -46,8 +46,16 @@ async function run(inputs) {
       if (get('fmt') === 'pdf') {
         files.push([new File([await makePdf(labels.flatMap(l => l.strips), dep)], base + '_58mm.pdf', { type: 'application/pdf' }), 'Scarica PDF']);
       } else {
-        const SFX = { 2: ['_1_codici', '_2_dati'], 3: ['_1_codici', '_2_codici', '_3_dati'] };
-        const LBL = { 2: ['Scarica 1 · codici', 'Scarica 2 · dati'], 3: ['Scarica 1 · codici', 'Scarica 2 · codici 2', 'Scarica 3 · dati'] };
+        const SFX = {
+          2: ['_1_codici', '_2_dati'],
+          3: ['_1_codici', '_2_codici', '_3_dati'],
+          4: ['_1_info', '_2_codice1', '_3_info2', '_4_codice2']
+        };
+        const LBL = {
+          2: ['Scarica 1 · codici', 'Scarica 2 · dati'],
+          3: ['Scarica 1 · codici', 'Scarica 2 · codici 2', 'Scarica 3 · dati'],
+          4: ['Scarica 1 · info', 'Scarica 2 · codice 1', 'Scarica 3 · info 2', 'Scarica 4 · codice 2']
+        };
         for (let i = 0; i < labels.length; i++) {
           const N = labels[i].strips.length;
           const sfx = SFX[N] || labels[i].strips.map((_, k) => '_' + (k + 1));
