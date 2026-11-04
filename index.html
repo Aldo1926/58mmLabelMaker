@@ -56,28 +56,21 @@ footer{text-align:center;color:var(--mute);font-size:12px;margin-top:26px}
   <h1>58mm <b>LabelMaker</b></h1>
 </header>
 <p class="sub">Trasforma le etichette dei corrieri in strisce grandi e leggibili per la stampante termica da scontrini. Tutto resta sul tuo dispositivo, funziona anche offline.</p>
-<div class="chips"><span>InPost Italia</span><span>InPost estero</span><span>BRT</span></div>
+<div class="chips"><span>InPost Italia</span><span>InPost estero</span><span>BRT</span><span>BRT estero</span></div>
 
 <label class="drop" id="drop"><input id="f" type="file" accept="application/pdf" multiple>
   <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#ff5a36" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0l-4 4m4-4l4 4"/><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3"/></svg>
   <strong>Scegli i PDF delle etichette</strong><small>anche più file insieme, oppure trascinali qui</small></label>
 
 <div class="opts">
-  <div class="opt"><span>Formato di uscita</span><div class="seg" id="fmt">
-    <label><input type="radio" name="fmt" value="png" checked><span>Immagini PNG</span></label>
-    <label><input type="radio" name="fmt" value="pdf"><span>PDF</span></label>
-  </div></div>
-  <div class="opt"><span>Spessore barre del codice</span><div class="seg" id="mod">
-    <label><input type="radio" name="mod" value="4" checked><span>Normale</span></label>
-    <label><input type="radio" name="mod" value="5"><span>Grande</span></label>
-    <label><input type="radio" name="mod" value="6"><span>Enorme</span></label>
-  </div></div>
+  <div class="opt"><span>Formato di uscita</span><div class="seg" id="fmt"><label><input type="radio" name="fmt" value="png" checked><span>Immagini PNG</span></label><label><input type="radio" name="fmt" value="pdf"><span>PDF</span></label></div></div>
+  <div class="opt"><span>Spessore barre del codice</span><div class="seg" id="mod"><label><input type="radio" name="mod" value="4" checked><span>Normale</span></label><label><input type="radio" name="mod" value="5"><span>Grande</span></label><label><input type="radio" name="mod" value="6"><span>Enorme</span></label></div></div>
 </div>
-  
+
 <div id="st"></div>
 <div id="out"></div>
 <button id="dall" class="g" hidden>Scarica tutti i file</button>
-<footer>Nessun file viene caricato online · versione 9.9</footer>
+<footer>Nessun file viene caricato online · versione 9</footer>
 </main>
 <script src="pdf-lib.min.js"></script>
 <script type="module" src="app.js"></script>
