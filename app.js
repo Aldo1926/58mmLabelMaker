@@ -6,6 +6,8 @@ const dep = {
   makeCanvas: (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; },
   toPng: c => new Promise(r => c.toBlob(b => b.arrayBuffer().then(r), 'image/png')),
 };
+// FIX: le strisce sono 1-bit (solo 0/255 dopo binarize): il JPEG introduce ringing
+// attorno ai bordi netti e "sbianca" le barre. Usiamo PNG (anche più piccolo di un JPG a parità di 1-bit).
 const toPngBlob = c => new Promise(r => c.toBlob(r, 'image/png'));
 const $ = id => document.getElementById(id), out = $('out'), st = $('st'), results = [];
 const NAMES = { A: 'InPost Italia', B: 'InPost estero', C: 'BRT', D: 'BRT estero' };
@@ -15,13 +17,13 @@ for (const n of ['fmt', 'mod']) {
   document.querySelectorAll(`input[name=${n}]`).forEach(i => i.onchange = () => localStorage.setItem(n, i.value));
 }
 function dl(f) { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
-
 async function convertAny(bytes, dep, opt) {
   let firstErr = null;
   try {
     const labels = await convertPdf(bytes, dep, opt);
     if (labels.length) return labels;
   } catch (e) { firstErr = e; }
+  // Fallback: normalizza su A4 e riprova (risolve i PDF A6 tipo Vinted)
   const fixed = await toA4(bytes, dep);
   try {
     const labels = await convertPdf(fixed, dep, opt);
@@ -32,7 +34,6 @@ async function convertAny(bytes, dep, opt) {
     throw e;
   }
 }
-
 async function run(inputs) {
   inputs = inputs.filter(f => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name));
   for (const file of inputs) {
@@ -45,23 +46,12 @@ async function run(inputs) {
       if (get('fmt') === 'pdf') {
         files.push([new File([await makePdf(labels.flatMap(l => l.strips), dep)], base + '_58mm.pdf', { type: 'application/pdf' }), 'Scarica PDF']);
       } else {
-        const SFX = {
-          2: ['_1_codici', '_2_dati'],
-          3: ['_1_codici', '_2_codici', '_3_dati'],
-          4: ['_1_info', '_2_codice1', '_3_info2', '_4_codice2']
-        };
-        const LBL = {
-          2: ['Scarica 1 · codici', 'Scarica 2 · dati'],
-          3: ['Scarica 1 · codici', 'Scarica 2 · codici 2', 'Scarica 3 · dati'],
-          4: ['Scarica 1 · info', 'Scarica 2 · codice 1', 'Scarica 3 · info 2', 'Scarica 4 · codice 2']
-        };
+        // FIX: PNG per entrambe le strisce (1-bit pulito, zero compression artifact sul barcode)
         for (let i = 0; i < labels.length; i++) {
-          const N = labels[i].strips.length;
-          const sfx = SFX[N] || labels[i].strips.map((_, k) => '_' + (k + 1));
-          const lbl = LBL[N] || labels[i].strips.map((_, k) => 'Scarica ' + (k + 1));
-          for (let j = 0; j < N; j++) {
-            const tag = (labels.length > 1 ? '_et' + (i + 1) : '') + sfx[j];
-            files.push([new File([await toPngBlob(labels[i].strips[j])], base + tag + '.png', { type: 'image/png' }), lbl[j]]);
+          const nm = labels[i].names || ['_1_codici', '_2_dati'];
+          for (let j = 0; j < labels[i].strips.length; j++) {
+            const tag = (labels.length > 1 ? '_et' + (i + 1) : '') + nm[j];
+            files.push([new File([await toPngBlob(labels[i].strips[j])], base + tag + '.png', { type: 'image/png' }), 'Scarica ' + (j + 1) + ' · ' + nm[j].replace(/^_\d+_/, '').replace(/_/g, ' ')]);
           }
         }
       }
@@ -75,7 +65,7 @@ async function run(inputs) {
     } catch (e) { box.className = 'res err'; box.innerHTML = '<h2></h2><small></small>'; box.querySelector('h2').textContent = file.name; box.querySelector('small').textContent = e.message; console.error(e); }
     out.prepend(box);
   }
-  st.textContent = ''; $('all').hidden = results.length < 3;
+  st.textContent = ''; $('all').hidden = results.length < 4;
 }
 $('f').onchange = e => { run([...e.target.files]); e.target.value = ''; };
 const drop = $('drop');
@@ -83,15 +73,4 @@ const drop = $('drop');
 ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('on'); }));
 drop.addEventListener('drop', e => run([...e.dataTransfer.files]));
 $('dall').onclick = () => results.forEach((f, i) => setTimeout(() => dl(f), i * 400));
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').then(reg => { reg.update().catch(() => {}); });
-  if (navigator.serviceWorker.controller) {
-    let done = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (done) return;
-      done = true;
-      window.location.reload();
-    });
-  }
-}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
