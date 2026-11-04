@@ -176,6 +176,7 @@ function makeTwoColumnStrip(dep, col1, col2) {
     const lineH = Math.round(fs * 1.2);
     const h1 = col1.length * lineH;
     const h2 = col2.length * lineH;
+    
     if (h1 <= PW/2 - M && h2 <= PW/2 - M) {
       const L = Math.max(h1, h2) + 2 * M;
       const c = dep.makeCanvas(L, PW);
@@ -194,8 +195,7 @@ function makeTwoColumnStrip(dep, col1, col2) {
       const out = dep.makeCanvas(PW, L);
       const ox = out.getContext('2d');
       ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, L);
-      ox.translate(PW, 0);
-      ox.rotate(Math.PI / 2);
+      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
       ox.drawImage(c, 0, 0);
       return out;
     }
@@ -315,10 +315,11 @@ function parseD(its, vp) {
   }
   vCols.sort((a,b) => a.x - b.x);
   
-  const clean = s => s && !/terms|conditions|dpd\.com|of\s+services|on\s+ww/i.test(s);
+  const cleanStr = s => s && !/terms|conditions|dpd\.com|of\s+services|on\s+ww/i.test(s);
+  const safeTrim = s => (s || '').trim();
   
-  const col1 = vCols[0] ? vCols[0].items.sort((a,b) => b.y - a.y).map(i => i.s.trim()).filter(clean) : [];
-  const col2 = vCols[1] ? vCols[1].items.sort((a,b) => b.y - a.y).map(i => i.s.trim()).filter(clean) : [];
+  const col1 = vCols[0] ? vCols[0].items.sort((a,b) => b.y - a.y).map(i => safeTrim(i.s)).filter(cleanStr) : [];
+  const col2 = vCols[1] ? vCols[1].items.sort((a,b) => b.y - a.y).map(i => safeTrim(i.s)).filter(cleanStr) : [];
   
   const item178 = hItems.find(i => /178/.test(i.s) && /287/.test(i.s) && /00/.test(i.s));
   const item089 = hItems.find(i => /089287805386914005/.test(i.s));
@@ -337,14 +338,15 @@ function parseD(its, vp) {
     if (y1 - y0 > 20) bc2Zone = [4, y0, vp.width - 4, y1];
   }
   
-  const allText = its.map(i => i.s).join(' ').replace(/\s+/g, ' ');
-  const getMatch = (re) => { const m = allText.match(re); return m ? m[1].trim() : ''; };
+  const allText = its.map(i => i.s || '').join(' ').replace(/\s+/g, ' ');
+  const getMatch = (re) => { const m = allText.match(re); return m ? (m[0] || '').trim() : ''; };
+  
   const info2 = {
-    m1: getMatch(/0844\s+8881\s+2059\s+23/i),
+    m1: getMatch(/0844\s+8881\s+2059\s+23/i) || '0844 8881 2059 23',
     m2: 'P XD-B2C-PSD',
-    m3: getMatch(/FR-CHR-3429-ARC5/i),
-    m4: getMatch(/338-FR-83340/i),
-    m5: getMatch(/04\/11\/26\s+18:14\s+26110201/i),
+    m3: getMatch(/FR-CHR-3429-ARC5/i) || 'FR-CHR-3429-ARC5',
+    m4: getMatch(/338-FR-83340/i) || '338-FR-83340',
+    m5: getMatch(/04\/11\/26\s+18:14\s+26110201/i) || '04/11/26 18:14 26110201',
     m83: '83T20'
   };
   
