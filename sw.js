@@ -1,4 +1,4 @@
-const VERSION = 'v8';                    // Bumpato per forzare l'aggiornamento
+const VERSION = 'v8';
 const CACHE = 'etichette-' + VERSION;
 
 const ASSETS = [
