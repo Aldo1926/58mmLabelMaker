@@ -328,24 +328,12 @@ export async function convertPdf(bytes, dep, opt = {}) {
             : kind === 'C' ? parseC(items)
             : parseD(items, vp);
 
-    // ---- BRT Estero: 4 strisce (info1 ruotata, BC1, info2 ruotata, BC2) ----
+    // ---- BRT Estero: 4 strisce in formato InPost estero ----
     if (kind === 'D') {
       const strips = [];
-      const cleanTop = dClean(d.topLines);
-      const cleanMid = dClean(d.midLines);
-      const L_INFO = Math.max(500, Math.max(cleanTop.length, cleanMid.length) * 40);
+      let bc1Strip = null, bc2Strip = null;
 
-      // Strip 1: info1 (landscape ruotato, come InPost estero)
-      if (cleanTop.length) {
-        try {
-          const s1 = landStrip(dep, (sh) => {
-            for (const t of cleanTop) sh.text(t, 32, { min: 16, lines: 2 });
-          }, d, L_INFO, null, 40);
-          strips.push(binarize(s1));
-        } catch (e) { console.warn('info1', e); }
-      }
-
-      // Strip 2: BC1 (178 287 00 + barcode + tracking sotto)
+      // Genera BC1
       if (d.bc1Zone) {
         const bc1 = await gd(page, vps, d.bc1Zone);
         const bits1 = sampleBarcode(bc1, 'x');
@@ -355,20 +343,10 @@ export async function convertPdf(bytes, dep, opt = {}) {
         if (d.bc1Human) sh.text(d.bc1Human, 36, { min: 18, align: 'center' });
         barcodeBlock(sh, bits1, num1, s1Eff, true);
         if (d.bc1Tracking) sh.text(d.bc1Tracking, 26, { min: 14, align: 'center' });
-        strips.push(binarize(sh.render(20)));
+        bc1Strip = binarize(sh.render(20));
       }
 
-      // Strip 3: info2 (landscape ruotato)
-      if (cleanMid.length) {
-        try {
-          const s2 = landStrip(dep, (sh) => {
-            for (const t of cleanMid) sh.text(t, 32, { min: 16, lines: 2 });
-          }, d, L_INFO, null, 40);
-          strips.push(binarize(s2));
-        } catch (e) { console.warn('info2', e); }
-      }
-
-      // Strip 4: BC2 (83T20 + barcode + 0083 340... sotto)
+      // Genera BC2
       if (d.bc2Zone) {
         const bc2 = await gd(page, vps, d.bc2Zone);
         const bits2 = sampleBarcode(bc2, 'x');
@@ -378,14 +356,64 @@ export async function convertPdf(bytes, dep, opt = {}) {
         if (d.bc2Human) sh.text(d.bc2Human, 36, { min: 18, align: 'center' });
         barcodeBlock(sh, bits2, num2, s2Eff, true);
         if (d.bc2Human2) sh.text(d.bc2Human2, 24, { min: 14, align: 'center' });
-        strips.push(binarize(sh.render(20)));
+        bc2Strip = binarize(sh.render(20));
       }
+
+      // Dividi le info: Info 1 (fino a References), Info 2 (Depot... + midLines)
+      const cleanTop = dClean(d.topLines);
+      const depotIdx = cleanTop.findIndex(t => /^Depot/i.test(t));
+      let info1Lines = cleanTop;
+      let info2Lines = [];
+      if (depotIdx > 0) {
+        info1Lines = cleanTop.slice(0, depotIdx);
+        info2Lines = cleanTop.slice(depotIdx).concat(dClean(d.midLines));
+      } else {
+        info2Lines = dClean(d.midLines);
+      }
+
+      // Info 1 (lunghezza = BC1)
+      if (info1Lines.length) {
+        const len = bc1Strip ? bc1Strip.height - 40 : 400;
+        try {
+          const sInfo = landStrip(dep, (sh) => {
+            for (const t of info1Lines) sh.text(t, 32, { min: 16, lines: 2 });
+          }, d, len, null, 40);
+          strips.push(binarize(sInfo));
+        } catch(e) {
+          const sInfo = landStrip(dep, (sh) => {
+            for (const t of info1Lines) sh.text(t, 32, { min: 16, lines: 2 });
+          }, d, 600, null, 40);
+          strips.push(binarize(sInfo));
+        }
+      }
+
+      // Aggiungi BC1
+      if (bc1Strip) strips.push(bc1Strip);
+
+      // Info 2 (lunghezza = BC2)
+      if (info2Lines.length) {
+        const len = bc2Strip ? bc2Strip.height - 40 : 500;
+        try {
+          const sInfo = landStrip(dep, (sh) => {
+            for (const t of info2Lines) sh.text(t, 32, { min: 16, lines: 2 });
+          }, d, len, null, 40);
+          strips.push(binarize(sInfo));
+        } catch(e) {
+          const sInfo = landStrip(dep, (sh) => {
+            for (const t of info2Lines) sh.text(t, 32, { min: 16, lines: 2 });
+          }, d, 800, null, 40);
+          strips.push(binarize(sInfo));
+        }
+      }
+
+      // Aggiungi BC2
+      if (bc2Strip) strips.push(bc2Strip);
 
       out.push({ kind, strips });
       continue;
     }
 
-    // ---- A / B / C: percorso comune ----
+    // ---- A / B / C: percorso comune (INVARIATO) ----
     const bcBox = kind === 'A' ? [70, 200, 235, 660]
                 : kind === 'B' ? [540, 88, 790, 156]
                 : [85, 165, 256, 252];
