@@ -1,5 +1,5 @@
 // sw.js — cache-first + aggiornamento automatico in background
-const VERSION = 'v3';                    // bumpa per forzare l'update immediato
+const VERSION = 'v5';                    // bumpa per forzare l'update immediato
 const CACHE = 'etichette-' + VERSION;
 
 const ASSETS = [
