@@ -208,7 +208,6 @@ function parseD(its, vp) {
     l.size = Math.max(...l.items.map(i => i.size));
   }
 
-  // Ancore
   const lineTracking = lineArr.find(l => /^\d{15,20}$/.test(l.t));
   const line178 = lineTracking ? [...lineArr].reverse().find(l =>
     l.cy < lineTracking.cy && /^\d{2,4}(\s+\d{2,4}){1,3}$/.test(l.t)) : null;
@@ -217,7 +216,6 @@ function parseD(its, vp) {
   const line0083 = line83 ? lineArr.find(l =>
     l.cy > line83.cy && /^\d[\d\sA-Z]{10,}$/.test(l.t)) : null;
 
-  // Zone barcode
   let bc1Zone = null, bc2Zone = null;
   if (lineTracking) {
     const y1 = lineTracking.top - 2;
@@ -230,7 +228,6 @@ function parseD(its, vp) {
     if (y1 - y0 > 30) bc2Zone = [4, y0, vp.width - 4, y1];
   }
 
-  // Sezioni info
   const bc1Start = line178 ? line178.cy - 1 : (lineTracking ? lineTracking.top - 150 : vp.height * 0.3);
   const topLines = lineArr.filter(l => l.cy < bc1Start).map(l => l.t);
 
@@ -288,6 +285,10 @@ function binarize(c) {
   x.putImageData(im, 0, 0); return c;
 }
 
+// Filtro righe inutili per BRT Estero
+const D_IGNORE = /Terms\s*&\s*Conditions|ww\.dpd\.com|www\.dpd\.com/i;
+const dClean = arr => (arr || []).filter(t => t && !D_IGNORE.test(t));
+
 // ---------------------------------------------------------------- API
 export async function convertPdf(bytes, dep, opt = {}) {
   const module_ = Math.max(3, opt.module || 4);
@@ -312,18 +313,10 @@ export async function convertPdf(bytes, dep, opt = {}) {
             : kind === 'C' ? parseC(items)
             : parseD(items, vp);
 
-    // ---- BRT Estero: 4 strisce (info / BC1 / info / BC2) ----
+    // ---- BRT Estero: 4 strisce in formato InPost estero ----
     if (kind === 'D') {
-      const strips = [];
-
-      // Strip 0: info sopra il primo barcode
-      {
-        const sh = new Sheet(PW, 1, dep);
-        for (const t of d.topLines) sh.text(t, 32, { min: 15, lines: 3 });
-        strips.push(binarize(sh.render(20)));
-      }
-
-      // Strip 1: BC1 (178 287 00 + barcode + tracking)
+      // Strip barcode BC1
+      let bc1Strip = null, bc1H = 0;
       if (d.bc1Zone) {
         const bc1 = await gd(page, vps, d.bc1Zone);
         const bits1 = sampleBarcode(bc1, 'x');
@@ -333,17 +326,12 @@ export async function convertPdf(bytes, dep, opt = {}) {
         if (d.bc1Human) sh.text(d.bc1Human, 36, { min: 18, align: 'center' });
         barcodeBlock(sh, bits1, num1, s1Eff);
         if (d.bc1Tracking) sh.text(d.bc1Tracking, 26, { min: 14, align: 'center' });
-        strips.push(binarize(sh.render(20)));
+        bc1Strip = binarize(sh.render(20));
+        bc1H = bc1Strip.height;
       }
 
-      // Strip 2: info tra BC1 e BC2
-      {
-        const sh = new Sheet(PW, 1, dep);
-        for (const t of d.midLines) sh.text(t, 30, { min: 15, lines: 2 });
-        strips.push(binarize(sh.render(20)));
-      }
-
-      // Strip 3: BC2 (83T20 + barcode + 0083 340…)
+      // Strip barcode BC2
+      let bc2Strip = null, bc2H = 0;
       if (d.bc2Zone) {
         const bc2 = await gd(page, vps, d.bc2Zone);
         const bits2 = sampleBarcode(bc2, 'x');
@@ -353,8 +341,40 @@ export async function convertPdf(bytes, dep, opt = {}) {
         if (d.bc2Human) sh.text(d.bc2Human, 36, { min: 18, align: 'center' });
         barcodeBlock(sh, bits2, num2, s2Eff);
         if (d.bc2Human2) sh.text(d.bc2Human2, 24, { min: 14, align: 'center' });
-        strips.push(binarize(sh.render(20)));
+        bc2Strip = binarize(sh.render(20));
+        bc2H = bc2Strip.height;
       }
+
+      // Strip info (landscape ruotate) allineate in altezza al barcode corrispondente
+      const infoLand = (lines, targetH) => {
+        const clean = dClean(lines);
+        if (!clean.length) return null;
+        const length = Math.max(220, targetH - 40);
+        for (let k = 2.5; k >= 0.4; k -= 0.05) {
+          const sh = new Sheet(length, k, dep);
+          for (const t of clean) sh.text(t, 30, { min: 14, lines: 2 });
+          const img = sh.render(0);
+          if (img.height <= PW - 2 * M) {
+            const c = dep.makeCanvas(PW, length + 40), x = c.getContext('2d');
+            x.fillStyle = '#fff'; x.fillRect(0, 0, PW, length + 40);
+            x.translate((PW - img.height) / 2 + img.height, 0);
+            x.rotate(Math.PI / 2);
+            x.drawImage(img, 0, 0);
+            return binarize(c);
+          }
+        }
+        return null;
+      };
+
+      const info1 = infoLand(d.topLines, bc1H || 500);
+      const info2 = infoLand(d.midLines, bc2H || 500);
+
+      // Ordine: info1 → BC1 → info2 → BC2
+      const strips = [];
+      if (info1) strips.push(info1);
+      if (bc1Strip) strips.push(bc1Strip);
+      if (info2) strips.push(info2);
+      if (bc2Strip) strips.push(bc2Strip);
 
       out.push({ kind, strips });
       continue;
@@ -382,7 +402,6 @@ export async function convertPdf(bytes, dep, opt = {}) {
   return out;
 }
 
-// Converte un PDF qualsiasi in A4 (fallback per etichette A6 come Vinted)
 export async function toA4(bytes, dep) {
   const { PDFLib } = dep;
   const src = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
