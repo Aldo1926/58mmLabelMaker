@@ -1,6 +1,6 @@
-// Core: legge le etichette InPost/BRT e produce due strisce 1-bit per stampanti termiche 58 mm.
+// Core: legge le etichette InPost/BRT e produce strisce 1-bit per stampanti termiche 58 mm.
 // dep = { pdfjs, makeCanvas(w,h), PDFLib, toPng(canvas), loadImage(src) }
-const PW = 324, M = 6, SC = 6;           // FIX: PW=324 (era la larghezza della versione "perfetta")
+const PW = 324, M = 6, SC = 6;
 const LOGO_IN = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACGAQAAAABP9orkAAADnUlEQVR42p2Yv3LjNhDGf4A0JgqPzXQuPHN8DHfmo7hM6fKqGNelzCPcozCTK1z6DY6XueJKyHMFlKG4KUjqDwURm6CRRvq4XOzu9+0CRoDv9yyvjQW4IbcsQKGDRa+CuUYFW7cqGEEFs1FnrVPBjC4gKGG/6WCig9U6WOV1W2hUsFL3UteqYGudNRtUMKNMljIgDzpYpYOVmRIeYQ4+LVqUcUVe5OIKe1izkkXY1+EbH5Zglr8B2PG0uFVpHkVEWmTZWvUK8Hm1aMzI5pceMEVc1rcb8SC45TQMe+wWNyrBgg/QZbJq4SnCjxwHRcJKpFmMhwQLbgeNyRZSgR8qZTMy55sxJwq0KUFEmkehEJFQDK9o4aRcwm2wwEN7LjWfz8uy+LU/i+6PRPV+PJeHTqe9fQoWz5IgSu31/7t9zGX1VsJMGJMvjVwnrbVzrVnRHqlePLO2PdTAZlfDxpSwLWewjRtD46HkDd54P7x0qiMpD2nawU+oEZ/cQnf47JGxGdgLaaqJIPTA2x7mz9MUAuA7IB6sJcLXAk0ctC/1v5/0M9BixJcUYQ572WtEs7ohhCueKtxZf/G7Q68zh35mT4vLYPdJv8dH4LpO+WaOXKwdYNPh3QenoorTc5ZvyWbqP5xwxG6qTUJlBKgp90BbwhcSGRuf3fl9+Nfn2R9+cn3JJz9NUQ9zWu6O9el3AFt0L81lAjrYDi9d+dRYYw6R8Qt0Hn9fj+JkSXfx9cSwgevT/Db3z50+bo+K8HhNqXk+qd657NGOhm6HRFzYQjFjUBJWyFDD0YJpOWLW5f5XZkbQcfOuX4KZE3WcZkufJOpaRsji3Nu6vh68thdHJB9oYteeZiFRTD/xLn7nLaWWh1XvDGXY1fWa7mJOR0da/sTRh+WBdvRZ2slauoHU1WCjHimUSFYJ+M1o8vLc68DgGJTEHpfqvJauuDqizPbO8k+Kgg7jWbEeYK+VmRh4TMRnnuEj99hhtuRF/OK40oBINKqpJlqoMuO2hT/WUGbOHxa4A0ebHfMeRTpuF30zIlZAbG62fF8BJnNatIRrgKbPwNpngAdZjoj8JSIiHY/LW5joextyx3+A9l11jL2TWnP6kKbI+xad4moiP5nZS2xOwl4zsNG3Mmh8U57E+1IF0905EHUnSu1Am70mGPIpkqWz4pJAexIfsrDuNJdXyluCbK7+011N73TWdPchXaWCxVoVt23unm6I21a30/cs7F8V0LyazN3eWAAAAABJRU5ErkJggg==', LOGO_BRT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACQAAAASCAAAAAAWSCP0AAAAeElEQVR42p2RQRLAIAgDN47//3J6qBRp1UM5MZJgSGQAEKNZVbshAu1B8jT2FlQ2+PDdmzkRBTScbK8WCZr0zFxWVBwYAVaIej/2MEnFAyN5UBzCDybtrvsF6uzucfYhJox3ppWhtGqgF/GYHoacA57c4wiqIj51AZG+Jx6XXgBtAAAAAElFTkSuQmCC';
 const FS = 'Arial,Helvetica,Roboto,sans-serif', FM = FS;
 
@@ -113,7 +113,7 @@ function decode128(bits) {
   }
 }
 
-// ---------------------------------------------------------------- blocchi grafici (striscia 1)
+// ---------------------------------------------------------------- blocchi grafici (striscia codici)
 function barcodeBlock(sh, bits, num, s) {
   const q = 10, N = bits.length, L = (N + 2 * q) * s; let fs = 44;
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
@@ -193,8 +193,71 @@ function parseC(its) {
   [d.mitt, d.dest, d.ind, d.misure] = [col(0), col(1), col(2), col(3)];
   return d;
 }
+function parseD(its, vp) {
+  const h = its.filter(i => !i.vert), d = {};
+  const sorted = [...h].sort((a, b) => a.cy - b.cy);
+  const lineArr = [];
+  for (const it of sorted) {
+    const last = lineArr[lineArr.length - 1];
+    if (last && Math.abs(it.cy - last.cy) < 5) last.items.push(it);
+    else lineArr.push({ cy: it.cy, items: [it] });
+  }
+  const lineTxt = l => l.items.slice().sort((a, b) => a.x0 - b.x0).map(i => i.s.trim()).join(' ').trim();
+  const findItem = re => h.find(i => re.test(i.s.trim()));
+  const lineOf = item => item ? lineArr.find(l => Math.abs(l.cy - item.cy) < 5) : null;
 
-// ---------------------------------------------------------------- striscia 2 (dati in lungo)
+  d.luogo = lineArr[0] ? lineTxt(lineArr[0]) : '';
+  d.paese = lineArr[1] ? lineTxt(lineArr[1]) : '';
+
+  const contact = findItem(/^Contact\b/i);
+  d.contatto = contact ? (lineOf(contact) ? lineTxt(lineOf(contact)) : contact.s.trim()).replace(/^Contact\s*/i, '').trim() : '';
+
+  const ref = findItem(/^References?:/i);
+  d.rif = ref ? (lineOf(ref) ? lineTxt(lineOf(ref)) : ref.s.trim()).replace(/^References?:\s*/i, '').trim() : '';
+
+  const track = findItem(/^\d{15,20}$/);
+  d.numero = track ? track.s.trim() : '';
+
+  const routing = h.filter(i => /^\d{2,3}$/.test(i.s.trim()) && i.size >= 14
+    && (!ref || i.cy > ref.cy + 2) && (!track || i.cy < track.cy - 2));
+  d.routing = routing.sort((a, b) => a.x0 - b.x0).map(i => i.s.trim()).join(' ');
+
+  const ref2 = findItem(/TRACK/i);
+  d.ref2 = ref2 ? (lineOf(ref2) ? lineTxt(lineOf(ref2)) : ref2.s.trim()) : '';
+
+  const serv = findItem(/B2C|PSD/i);
+  d.servizio = serv ? (lineOf(serv) ? lineTxt(lineOf(serv)) : serv.s.trim()) : '';
+
+  d.sort = h.filter(i => /^[A-Z0-9]{2,4}-/.test(i.s.trim()) && (!track || i.cy > track.cy))
+    .sort((a, b) => a.cy - b.cy || a.x0 - b.x0).map(i => i.s.trim());
+
+  const data = findItem(/^\d{2}\/\d{2}\/\d{2,4}\s+\d{2}:\d{2}/);
+  d.data = data ? data.s.trim() : '';
+
+  const cod2 = h.find(i => /^[A-Z0-9]{4,6}$/.test(i.s.trim()) && (!data || i.cy > data.cy + 2));
+  d.codice2 = cod2 ? cod2.s.trim() : '';
+
+  // BC1 zone: fra i box routing e il testo del tracking
+  if (track) {
+    const y1 = track.top - 4;
+    const y0 = routing.length ? Math.max(...routing.map(r => r.cy + r.size)) + 8 : y1 - 120;
+    const xMin = Math.max(0, (routing.length ? Math.min(...routing.map(r => r.x0)) : track.x0) - 30);
+    const xMax = Math.min(vp.width, (routing.length ? Math.max(...routing.map(r => r.x1)) : track.x1) + 30);
+    d.bcZone = [xMin, y0, xMax, y1];
+  }
+
+  // BC2 zone: fra il codice2 ("83T20") e il testo human-readable in fondo
+  const bottomHuman = h.find(i => /^\d+\s+\d+\s+\d+/.test(i.s.trim()) && (!cod2 || i.cy > cod2.cy + 2) && (!data || i.cy > data.cy + 2));
+  d.bc2Human = bottomHuman ? bottomHuman.s.trim() : '';
+  if (cod2 && vp) {
+    const y0 = cod2.top + cod2.size + 6;
+    const y1 = bottomHuman ? bottomHuman.top - 2 : vp.height - 4;
+    d.bc2Zone = [8, y0, vp.width - 8, y1];
+  }
+  return d;
+}
+
+// ---------------------------------------------------------------- striscia dati (in lungo)
 const detA = (sh, d) => {
   sh.cells([['DEPOSITO', d.deposito], ['GIRO', d.giro], ['PROV.', d.prov], ['DIM.', d.dimensioni], ['DATA ETICHETTA', d.data]], 64, [1.2, 1.5, 1, 0.8, 2.2]);
   sh.rule(2, 3); sh.text(d.nome, 40, { min: 20 }); sh.text(d.codice, 56, { min: 20, invert: true });
@@ -217,6 +280,20 @@ const detC = (sh, d) => {
   sh.text('MITTENTE: ' + (d.mitt[0] || '') + (d.mitt[1] ? ' (' + d.mitt[1] + ')' : ''), 26, { min: 16, lines: 2 });
   sh.text('RIF.: ' + d.rif, 30, { min: 16 });
 };
+const detD = (sh, d) => {
+  if (d.luogo) sh.text(d.luogo, 64, { min: 24, invert: true });
+  if (d.paese) sh.text(d.paese, 44, { min: 20 });
+  sh.rule(2, 3);
+  if (d.contatto) sh.text('CONTATTO: ' + d.contatto, 30, { min: 18, lines: 2 });
+  if (d.rif) sh.text('RIF.: ' + d.rif, 32, { min: 18, lines: 2 });
+  if (d.ref2) sh.text(d.ref2, 30, { min: 16 });
+  if (d.servizio) sh.text(d.servizio, 30, { min: 16 });
+  sh.rule(2, 3);
+  if (d.sort.length) sh.text(d.sort.join('  |  '), 32, { min: 18, lines: 2 });
+  if (d.data) sh.text(d.data, 30, { min: 16 });
+  if (d.codice2) sh.text('COD: ' + d.codice2, 30, { min: 16 });
+};
+
 function landStrip(dep, builder, d, length, logo, tail = 40) {
   for (let k = 2.5; k >= 0.4; k -= 0.05) {
     const sh = new Sheet(length, k, dep); builder(sh, d); const img = sh.render(0);
@@ -235,57 +312,87 @@ function binarize(c) {
 
 // ---------------------------------------------------------------- API
 export async function convertPdf(bytes, dep, opt = {}) {
-  // FIX: niente scaling del modulo. Module = valore scelto dall'utente (default 4).
-  // Con PW=324 e module=4 le barre stampate sono larghe come nella versione originale "perfetta".
   const module_ = Math.max(3, opt.module || 4);
   const { pdfjs } = dep, out = [];
   const li = await dep.loadImage(LOGO_IN), lb = await dep.loadImage(LOGO_BRT);
-  // FIX: logo riportati alle dimensioni originali (A/B 64, BRT 58)
-  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''] };
+  const LG = { A: [li, 64, 'ITALIA'], B: [li, 64, 'ESTERO'], C: [lb, 58, ''], D: [lb, 58, ''] };
   const doc = await pdfjs.getDocument({ data: bytes.slice(0), useSystemFonts: true }).promise;
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p), v0 = page.getViewport({ scale: 1 });
     let items = await getItems(page, v0, pdfjs.Util), txt = items.map(i => i.s).join(' ');
-    let kind = /DESTINATARIO/.test(txt) ? 'A' : /Receiver/.test(txt) ? 'B' : /Rif\.:/.test(txt) && /KG\./.test(txt) ? 'C' : null;
+    let kind = /DESTINATARIO/.test(txt) ? 'A'
+      : /Receiver/.test(txt) ? 'B'
+      : /Rif\.:/.test(txt) && /KG\./.test(txt) ? 'C'
+      : /References:/.test(txt) && /TRACK/.test(txt) ? 'D'
+      : null;
     if (!kind) continue;
     const rot = kind === 'B' ? (page.rotate + 270) % 360 : page.rotate, vp = page.getViewport({ scale: 1, rotation: rot });
     if (kind === 'B') items = await getItems(page, vp, pdfjs.Util);
     const vps = page.getViewport({ scale: SC, rotation: rot }), gd = grabDark.bind(dep);
-    const d = kind === 'A' ? parseA(items) : kind === 'B' ? parseB(items) : parseC(items);
-    const bc = await gd(page, vps, kind === 'A' ? [70, 200, 235, 660] : kind === 'B' ? [540, 88, 790, 156] : [85, 165, 256, 252]);
+    const d = kind === 'A' ? parseA(items)
+            : kind === 'B' ? parseB(items)
+            : kind === 'C' ? parseC(items)
+            : parseD(items, vp);
+
+    const bcBox = kind === 'A' ? [70, 200, 235, 660]
+                : kind === 'B' ? [540, 88, 790, 156]
+                : kind === 'C' ? [85, 165, 256, 252]
+                : d.bcZone;
+    if (!bcBox) throw new Error('BRT Estero: zona barcode non rilevata (routing/tracking non trovati)');
+    const bc = await gd(page, vps, bcBox);
     const sh = new Sheet(PW, 1, dep), bits = sampleBarcode(bc, kind === 'A' ? 'y' : 'x');
     if (kind === 'C') d.numero = decode128(bits) || (d.zona + d.classe + d.sub + d.sped).replace(/\D/g, '');
+    if (kind === 'D' && !d.numero) d.numero = decode128(bits) || '';
+
     sh.logo(...LG[kind]);
     const headerH = sh.blocks.reduce((a, b) => a + b.height, 0);
     barcodeBlock(sh, bits, d.numero, module_); sh.gap(14);
-    if (kind !== 'C') { const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]); dmBlock(sh, sampleDM(dm)); sh.gap(14); }
-    const s1 = sh.render(40);
-    const s2 = landStrip(dep, { A: detA, B: detB, C: detC }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
 
-    out.push({ kind, strips: [binarize(s1), binarize(s2)] });
+    let bc2Sheet = null;
+    if (kind === 'A' || kind === 'B') {
+      const dm = await gd(page, vps, kind === 'A' ? [300, 527, 500, 662] : [698, 340, 763, 412]);
+      dmBlock(sh, sampleDM(dm)); sh.gap(14);
+    } else if (kind === 'D' && d.bc2Zone) {
+      const bc2 = await gd(page, vps, d.bc2Zone);
+      const bits2 = sampleBarcode(bc2, 'x');
+      const num2 = decode128(bits2) || (d.bc2Human || '').replace(/\s/g, '');
+      bc2Sheet = new Sheet(PW, 1, dep);
+      barcodeBlock(bc2Sheet, bits2, num2, module_); bc2Sheet.gap(14);
+    }
+
+    const s1 = sh.render(40);
+    const strips = [binarize(s1)];
+
+    if (kind === 'D' && bc2Sheet) {
+      const curH = bc2Sheet.blocks.reduce((a, b) => a + b.height, 0);
+      strips.push(binarize(bc2Sheet.render(Math.max(0, s1.height - curH))));
+    }
+
+    const sData = landStrip(dep, { A: detA, B: detB, C: detC, D: detD }[kind], d, s1.height - 40 - headerH, LG[kind], 40 + headerH);
+    strips.push(binarize(sData));
+
+    out.push({ kind, strips });
   }
   return out;
 }
+
+// Converte un PDF qualsiasi in A4 (fallback per etichette A6 come Vinted)
 export async function toA4(bytes, dep) {
   const { PDFLib } = dep;
   const src = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
   const out = await PDFLib.PDFDocument.create();
-  const A4 = [595.2756, 841.8898];               // A4 in punti PDF
+  const A4 = [595.2756, 841.8898];
   for (const sp of src.getPages()) {
     const ew = sp.getWidth(), eh = sp.getHeight();
-    const emb = await out.embedPage(sp);         // XObject della pagina originale
+    const emb = await out.embedPage(sp);
     const pg = out.addPage(A4);
-    const sc = Math.min(A4[0] / ew, A4[1] / eh); // keep_proportion
+    const sc = Math.min(A4[0] / ew, A4[1] / eh);
     const w = ew * sc, h = eh * sc;
-    pg.drawPage(emb, {
-      x: (A4[0] - w) / 2,
-      y: (A4[1] - h) / 2,
-      width: w,
-      height: h,
-    });
+    pg.drawPage(emb, { x: (A4[0] - w) / 2, y: (A4[1] - h) / 2, width: w, height: h });
   }
-  return out.save();                              // Uint8Array
+  return out.save();
 }
+
 export async function makePdf(canvases, dep) {
   const pdf = await dep.PDFLib.PDFDocument.create();
   for (const c of canvases) { const img = await pdf.embedPng(await dep.toPng(c)), pg = pdf.addPage([c.width * 72 / 203, c.height * 72 / 203]); pg.drawImage(img, { x: 0, y: 0, width: pg.getWidth(), height: pg.getHeight() }); }
