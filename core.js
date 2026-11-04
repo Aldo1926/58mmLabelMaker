@@ -129,24 +129,125 @@ function barcodeBlock(sh, bits, num, s, noNum = false) {
   }
   sh.blocks.push(c);
 }
-function barcodeBlockH(sh, bits, h) {
-  const q = 10, N = bits.length, L = (N + 2 * q) * 2; 
-  const c = sh.dep.makeCanvas(sh.W, h);
-  const x = c.getContext('2d');
-  x.fillStyle = '#fff'; x.fillRect(0, 0, sh.W, h);
-  x.fillStyle = '#000';
-  const scale = Math.min(1, (sh.W - 2 * M) / L);
-  const fw = scale * 2;
-  const xb = M + (sh.W - 2 * M - L * scale) / 2;
-  for (let i = 0; i < N; i++) if (bits[i]) {
-    x.fillRect(Math.round(xb + (q + i) * fw), 0, Math.max(1, Math.round(fw)), h);
-  }
-  sh.blocks.push(c);
-}
 function dmBlock(sh, mods) {
   const n = mods.length, q = 2, s = Math.max(1, Math.floor(sh.cw / (n + 2 * q))), sz = (n + 2 * q) * s, [c, x] = sh.mk(sz);
   x.fillStyle = '#000'; mods.forEach((r, i) => r.forEach((v, j) => v && x.fillRect((q + j) * s, (q + i) * s, s, s)));
   sh.image(c);
+}
+
+function makeBarcodeStrip(sh, bits, topTexts, bottomText, s, bottomAlign = 'center') {
+  const q = 10, N = bits.length, L = (N + 2 * q) * s;
+  const T = 120;
+  const headerH = 30;
+  const footerH = 30;
+  const [c, x] = sh.mk(headerH + T + footerH + 20);
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#000';
+  x.textBaseline = 'top';
+  
+  x.font = sh.f(24);
+  if (topTexts.left) x.fillText(topTexts.left, M, 0);
+  if (topTexts.center) x.fillText(topTexts.center, (sh.W - x.measureText(topTexts.center).width) / 2, 0);
+  if (topTexts.right) x.fillText(topTexts.right, sh.W - M - x.measureText(topTexts.right).width, 0);
+  
+  const xb = M + (sh.cw - L) / 2;
+  for (let i = 0; i < N; i++) if (bits[i]) {
+    const xi = Math.round(xb + (q + i) * s);
+    x.fillRect(xi, headerH, Math.max(1, Math.round(s)), T);
+  }
+  
+  if (bottomText) {
+    let fs = 20;
+    x.font = sh.f(fs);
+    let tw = x.measureText(bottomText).width;
+    while (tw > sh.cw && fs > 10) {
+      fs -= 1; x.font = sh.f(fs); tw = x.measureText(bottomText).width;
+    }
+    let tx = M;
+    if (bottomAlign === 'center') tx = (sh.W - tw) / 2;
+    else if (bottomAlign === 'right') tx = sh.W - M - tw;
+    x.fillText(bottomText, tx, headerH + T + 4);
+  }
+  sh.blocks.push(c);
+}
+
+function makeTwoColumnStrip(dep, col1, col2) {
+  for (let k = 2.5; k >= 0.4; k -= 0.05) {
+    const sh1 = new Sheet(150, k, dep);
+    for (const t of col1) sh1.text(t, 28, { min: 12, lines: 3 });
+    const sh2 = new Sheet(150, k, dep);
+    for (const t of col2) sh2.text(t, 28, { min: 12, lines: 3 });
+    
+    const h1 = sh1.blocks.reduce((a,b)=>a+b.height,0);
+    const h2 = sh2.blocks.reduce((a,b)=>a+b.height,0);
+    
+    if (h1 <= 160 && h2 <= 160) {
+      const length = Math.max(h1, h2) + 2*M;
+      const c = dep.makeCanvas(length, PW);
+      const x = c.getContext('2d');
+      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(sh1.render(0), M, M);
+      x.drawImage(sh2.render(0), M, PW - h2 - M);
+      
+      const out = dep.makeCanvas(PW, length);
+      const ox = out.getContext('2d');
+      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, length);
+      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
+      ox.drawImage(c, 0, 0);
+      return out;
+    }
+  }
+  return dep.makeCanvas(PW, 400);
+}
+
+function makeInfo2Strip(dep, lines) {
+  const m1 = lines.find(t => /0844/.test(t)) || '';
+  const m2 = lines.find(t => /XD.*B2C/i.test(t)) || '';
+  const m3 = lines.find(t => /FR.*CHR/i.test(t)) || '';
+  const m4 = lines.find(t => /338.*FR/i.test(t)) || '';
+  const m5 = lines.find(t => /04\/11/i.test(t)) || '';
+  const m83 = '83T20';
+  
+  const r1_left = m1.split('P')[0].trim();
+  const r1_right = 'P ' + (m2.replace(/XD-\s*B2C-\s*PSD/i, 'XD-B2C-PSD').replace(/SERVICE/i, '').trim());
+  
+  for (let k = 2.5; k >= 0.4; k -= 0.05) {
+    const sh = new Sheet(PW, k, dep);
+    const fs = Math.round(28 * k);
+    
+    const [c1, x1] = sh.mk(Math.round(fs * 1.2) + 4);
+    x1.font = sh.f(fs);
+    x1.fillStyle = '#000';
+    x1.textBaseline = 'top';
+    x1.fillText(r1_left, M, 2);
+    x1.fillText(r1_right, sh.W - M - x1.measureText(r1_right).width, 2);
+    sh.blocks.push(c1);
+    
+    sh.text('TRACK', 28, { min: 14 });
+    sh.text('SERVICE', 28, { min: 14 });
+    
+    sh.text(m3, 28, { min: 14, align: 'center' });
+    sh.text(m4, 28, { min: 14, align: 'center' });
+    sh.text(m5, 28, { min: 14, align: 'center' });
+    
+    const [c7, x7] = sh.mk(Math.round(fs * 1.2) + 4);
+    x7.font = sh.f(fs);
+    x7.fillStyle = '#000';
+    x7.fillText(m83, sh.W - M - x7.measureText(m83).width, 2);
+    sh.blocks.push(c7);
+    
+    const img = sh.render(0);
+    if (img.height <= 500) {
+      const length = img.height + 2*M;
+      const out = dep.makeCanvas(PW, length);
+      const ox = out.getContext('2d');
+      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, length);
+      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
+      ox.drawImage(img, 0, 0);
+      return out;
+    }
+  }
+  return dep.makeCanvas(PW, 400);
 }
 
 // ---------------------------------------------------------------- lettura testo
@@ -210,71 +311,70 @@ function parseC(its) {
   return d;
 }
 function parseD(its, vp) {
-  const h = its.filter(i => !i.vert);
-  const sorted = [...h].sort((a, b) => a.cy - b.cy || a.x0 - b.x0);
-  const lineArr = [];
-  for (const it of sorted) {
-    const last = lineArr[lineArr.length - 1];
-    if (last && Math.abs(it.cy - last.cy) < 5) last.items.push(it);
-    else lineArr.push({ cy: it.cy, top: it.top, items: [it] });
+  const all = its.map(it => ({ s: it.s.trim(), x: it.x0, y: it.cy, vert: it.vert, top: it.top, size: it.size }));
+  const h = all.filter(i => !i.vert).sort((a,b) => a.y - b.y || a.x - b.x);
+  const v = all.filter(i => i.vert).sort((a,b) => a.x - b.x || a.y - b.y);
+  
+  const vCols = [];
+  for (const it of v) {
+    let col = vCols.find(c => Math.abs(c.x - it.x) < 10);
+    if (!col) { col = { x: it.x, items: [] }; vCols.push(col); }
+    col.items.push(it);
   }
-  for (const l of lineArr) {
-    l.items.sort((a, b) => a.x0 - b.x0);
-    l.t = l.items.map(i => i.s.trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-    l.size = Math.max(...l.items.map(i => i.size));
+  vCols.sort((a,b) => a.x - b.x);
+  const vLines = vCols.map(c => c.items.sort((a,b) => a.y - b.y).map(i => i.s).join(' '));
+  
+  const hLines = [];
+  for (const it of h) {
+    let line = hLines.find(l => Math.abs(l.y - it.y) < 5);
+    if (!line) { line = { y: it.y, items: [] }; hLines.push(line); }
+    line.items.push(it);
   }
-
-  const lineTracking = lineArr.find(l => /^\d{15,20}$/.test(l.t));
-  const line178 = lineTracking ? [...lineArr].reverse().find(l =>
-    l.cy < lineTracking.cy && /^\d{2,4}(\s+\d{2,4}){1,3}$/.test(l.t)) : null;
-
-  const trackCy = lineTracking ? lineTracking.cy : 0;
-  const item83 = [...h]
-    .filter(i => i.cy > trackCy + 4 && /^\d{2}[A-Z]\d{2}$/i.test(i.s.trim()))
-    .sort((a, b) => b.cy - a.cy)[0];
-
-  const line0083 = item83 ? lineArr.find(l =>
-    l.cy > item83.cy && /^\d[\d\sA-Z]{10,}$/.test(l.t)) : null;
-
+  hLines.sort((a,b) => a.y - b.y);
+  const hLineTexts = hLines.map(l => l.items.sort((a,b) => a.x - b.x).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim());
+  
+  const clean = [...vLines, ...hLineTexts].filter(t => t && !D_IGNORE.test(t));
+  
+  const trackLine = clean.find(t => /^\d{15,20}$/.test(t));
+  const line178 = clean.find(t => /^\d{2}\s+\d{2}\s+\d{2}$/.test(t));
+  const item83 = clean.find(t => /^\d{2}[A-Z]\d{2}$/i.test(t));
+  const line0083 = clean.find(t => /^\d[\d\sA-Z]{10,}$/.test(t) && t.includes('0083'));
+  
   let bc1Zone = null, bc2Zone = null;
-  if (lineTracking) {
-    const y1 = lineTracking.top - 2;
-    const y0 = line178 ? line178.cy + line178.size + 4 : Math.max(0, y1 - 150);
+  const trackItem = h.find(i => i.s === trackLine);
+  const item178 = h.find(i => i.s === line178);
+  const item83Item = h.find(i => i.s === item83);
+  const item0083 = h.find(i => i.s === line0083);
+  
+  if (trackItem) {
+    const y1 = trackItem.top - 2;
+    const y0 = item178 ? item178.y + item178.size + 4 : Math.max(0, y1 - 150);
     if (y1 - y0 > 30) bc1Zone = [4, y0, vp.width - 4, y1];
   }
-  if (item83) {
-    const y0 = item83.cy + item83.size + 4;
-    const y1 = line0083 ? line0083.top - 2 : vp.height - 4;
+  if (item83Item) {
+    const y0 = item83Item.y + item83Item.size + 4;
+    const y1 = item0083 ? item0083.top - 2 : vp.height - 4;
     if (y1 - y0 > 30) bc2Zone = [4, y0, vp.width - 4, y1];
   }
-
-  const bc1Start = line178 ? line178.cy - 1 : (lineTracking ? lineTracking.top - 150 : vp.height * 0.3);
-  const topLines = lineArr.filter(l => l.cy < bc1Start);
-
-  const midX = vp.width / 2;
-  const leftInfo = topLines.filter(l => l.items[0].x0 < midX).map(l => l.t);
-  const rightInfo = topLines.filter(l => l.items[0].x0 >= midX).map(l => l.t);
-
-  const midStart = lineTracking ? lineTracking.cy + 2 : -1;
-  const midEnd = item83 ? item83.cy - 2 : (line0083 ? line0083.cy - 2 : vp.height);
-  const midLines = lineArr
-    .filter(l => l.cy > midStart && l.cy < midEnd)
-    .map(l => {
-      let t = l.t;
-      if (item83 && l.items.includes(item83)) {
-        t = l.items.filter(i => i !== item83).map(i => i.s).join(' ').trim();
-      }
-      return t;
-    })
-    .filter(t => t && !/^\d{2}[A-Z]\d{2}$/i.test(t));
-
+  
+  const idx178 = clean.indexOf(line178);
+  const idxTrack = clean.indexOf(trackLine);
+  const idx83 = clean.indexOf(item83);
+  
+  let topLines = [], midLines = [];
+  if (idx178 > 0) topLines = clean.slice(0, idx178);
+  else if (idxTrack > 0) topLines = clean.slice(0, idxTrack);
+  
+  if (idxTrack > 0 && idx83 > 0) midLines = clean.slice(idxTrack + 1, idx83);
+  else if (idxTrack > 0) midLines = clean.slice(idxTrack + 1);
+  
   return {
     bc1Zone, bc2Zone,
-    bc1Human: line178 ? line178.t : '',
-    bc1Tracking: lineTracking ? lineTracking.t : '',
-    leftInfo, rightInfo, midLines,
-    bc2Human: item83 ? item83.s.trim() : '',
-    bc2Human2: line0083 ? line0083.t : '',
+    bc1Human: line178 || '',
+    bc1Tracking: trackLine || '',
+    bc2Human: item83 || '',
+    bc2Human2: line0083 || '',
+    topLines, midLines
   };
 }
 
@@ -320,7 +420,6 @@ function binarize(c) {
 
 // Filtro righe inutili per BRT Estero
 const D_IGNORE = /terms|conditions|dpd\.com|of\s+services|on\s+ww/i;
-const dClean = arr => (arr || []).filter(t => t && !D_IGNORE.test(t));
 
 // ---------------------------------------------------------------- API
 export async function convertPdf(bytes, dep, opt = {}) {
@@ -346,98 +445,62 @@ export async function convertPdf(bytes, dep, opt = {}) {
             : kind === 'C' ? parseC(items)
             : parseD(items, vp);
 
-    // ---- BRT Estero: 4 strisce orizzontali ----
+    // ---- BRT Estero ----
     if (kind === 'D') {
       const strips = [];
-      const lCol = dClean(d.leftInfo);
-      const rCol = dClean(d.rightInfo);
+      const top = d.topLines || [];
+      const mid = d.midLines || [];
       
-      // Strip 1: Info 1 (due colonne)
-      const shL = new Sheet(PW / 2, 1, dep);
-      for (const t of lCol) shL.text(t, 24, { min: 10, lines: 2 });
-      const shR = new Sheet(PW / 2, 1, dep);
-      for (const t of rCol) shR.text(t, 24, { min: 10, lines: 2 });
+      const depotIdx = top.findIndex(t => /Depot/i.test(t));
+      let col1 = top, col2 = [];
+      if (depotIdx > 0) {
+        col1 = top.slice(0, depotIdx);
+        col2 = top.slice(depotIdx);
+      } else {
+        col1 = top;
+      }
       
-      const hL = shL.blocks.reduce((a, b) => a + b.height, 0);
-      const hR = shR.blocks.reduce((a, b) => a + b.height, 0);
-      const c1 = dep.makeCanvas(PW, Math.max(hL, hR) + 20);
-      const cx1 = c1.getContext('2d');
-      cx1.fillStyle = '#fff'; cx1.fillRect(0, 0, PW, c1.height);
-      cx1.drawImage(shL.render(0), 0, 10);
-      cx1.drawImage(shR.render(0), PW / 2, 10);
-      strips.push(binarize(c1));
-      
-      // Strip 2: BC1
+      // BC1
+      let bc1Strip = null;
       if (d.bc1Zone) {
         const bc1 = await gd(page, vps, d.bc1Zone);
         const bits1 = sampleBarcode(bc1, 'x');
-        const sh2 = new Sheet(PW, 1, dep);
+        const num1 = d.bc1Tracking || decode128(bits1) || '';
+        const maxS = Math.floor((PW - 2 * M) / (bits1.length + 20));
+        const s1Eff = Math.min(module_, Math.max(2, maxS));
         
-        const cTop = dep.makeCanvas(PW, 30);
-        const ctxTop = cTop.getContext('2d');
-        ctxTop.fillStyle = '#fff'; ctxTop.fillRect(0, 0, PW, 30);
-        ctxTop.fillStyle = '#000'; ctxTop.font = sh2.f(24); ctxTop.textBaseline = 'top';
-        const parts = d.bc1Human.split(' ');
-        if (parts.length >= 3) {
-          ctxTop.fillText(parts[0], M, 4);
-          ctxTop.fillText(parts[1], PW / 2 - ctxTop.measureText(parts[1]).width / 2, 4);
-          ctxTop.fillText(parts[2], PW - M - ctxTop.measureText(parts[2]).width, 4);
-        } else {
-          ctxTop.fillText(d.bc1Human, M, 4);
-        }
-        sh2.blocks.push(cTop);
-        
-        barcodeBlockH(sh2, bits1, 110);
-        sh2.text(d.bc1Tracking || decode128(bits1) || '', 24, { align: 'center', min: 10 });
-        
-        strips.push(binarize(sh2.render(10)));
+        const sh = new Sheet(PW, 1, dep);
+        makeBarcodeStrip(sh, bits1, { left: '178', center: '287', right: '00' }, num1, s1Eff, 'center');
+        bc1Strip = binarize(sh.render(20));
       }
       
-      // Strip 3: Info 2
-      const sh3 = new Sheet(PW, 1, dep);
-      let l1 = '', r1 = '', l2 = '', l3 = '', c1t = '', c2t = '', c3t = '';
-      const mid = dClean(d.midLines);
-      for (const line of mid) {
-        if (line.includes('TRACK')) {
-          l1 = line.replace('P TRACK', '').trim();
-          l2 = 'TRACK';
-        } else if (line.includes('SERVICE')) {
-          l3 = 'SERVICE';
-        } else if (line.includes('FR-CHR')) c1t = line;
-        else if (line.includes('338-FR')) c2t = line;
-        else if (line.includes('04/11/26')) c3t = line;
-        if (line.includes('XD-B2C-PSD')) r1 = 'P ' + line.replace('SERVICE', '').trim();
+      // Info 1
+      if (col1.length || col2.length) {
+        const c = makeTwoColumnStrip(dep, col1, col2);
+        strips.push(binarize(c));
       }
+      if (bc1Strip) strips.push(bc1Strip);
       
-      const c3R1 = dep.makeCanvas(PW, 30);
-      const cx3R1 = c3R1.getContext('2d');
-      cx3R1.fillStyle = '#fff'; cx3R1.fillRect(0, 0, PW, 30);
-      cx3R1.fillStyle = '#000'; cx3R1.font = sh3.f(24); cx3R1.textBaseline = 'top';
-      cx3R1.fillText(l1, M, 4);
-      cx3R1.fillText(r1, PW - M - cx3R1.measureText(r1).width, 4);
-      sh3.blocks.push(c3R1);
-      
-      sh3.text(l2, 24, { align: 'left', min: 10 });
-      sh3.text(l3, 24, { align: 'left', min: 10 });
-      sh3.text(c1t, 24, { align: 'center', min: 10 });
-      sh3.text(c2t, 24, { align: 'center', min: 10 });
-      sh3.text(c3t, 24, { align: 'center', min: 10 });
-      sh3.text(d.bc2Human, 24, { align: 'right', min: 10 }); // 83T20
-      
-      strips.push(binarize(sh3.render(10)));
-      
-      // Strip 4: BC2
+      // BC2
+      let bc2Strip = null;
       if (d.bc2Zone) {
         const bc2 = await gd(page, vps, d.bc2Zone);
         const bits2 = sampleBarcode(bc2, 'x');
-        const sh4 = new Sheet(PW, 1, dep);
+        const num2 = d.bc2Human2 || decode128(bits2) || '';
+        const maxS = Math.floor((PW - 2 * M) / (bits2.length + 20));
+        const s2Eff = Math.min(module_, Math.max(2, maxS));
         
-        sh4.text(d.bc2Human, 24, { align: 'right', min: 10 });
-        barcodeBlockH(sh4, bits2, 110);
-        sh4.text(d.bc2Human2 || decode128(bits2) || '', 20, { align: 'left', min: 10 });
-        
-        strips.push(binarize(sh4.render(10)));
+        const sh = new Sheet(PW, 1, dep);
+        makeBarcodeStrip(sh, bits2, { right: d.bc2Human || '83T20' }, num2, s2Eff, 'left');
+        bc2Strip = binarize(sh.render(20));
       }
+      
+      // Info 2
+      if (mid.length || d.bc2Human) {
+        const c = makeInfo2Strip(dep, mid);
+        strips.push(binarize(c));
+      }
+      if (bc2Strip) strips.push(bc2Strip);
       
       out.push({ kind, strips });
       continue;
