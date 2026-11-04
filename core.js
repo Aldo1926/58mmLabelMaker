@@ -135,6 +135,121 @@ function dmBlock(sh, mods) {
   sh.image(c);
 }
 
+function makeBarcodeStrip(sh, bits, topTexts, bottomText, s, bottomAlign = 'center') {
+  const q = 10, N = bits.length, L = (N + 2 * q) * s;
+  const T = 140;
+  const headerH = 30;
+  const footerH = 30;
+  const [c, x] = sh.mk(headerH + T + footerH + 20);
+  x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = '#000';
+  x.textBaseline = 'top';
+  
+  x.font = sh.f(24);
+  if (topTexts.left) x.fillText(topTexts.left, M, 0);
+  if (topTexts.center) x.fillText(topTexts.center, (sh.W - x.measureText(topTexts.center).width) / 2, 0);
+  if (topTexts.right) x.fillText(topTexts.right, sh.W - M - x.measureText(topTexts.right).width, 0);
+  
+  const xb = M + (sh.cw - L) / 2;
+  for (let i = 0; i < N; i++) if (bits[i]) {
+    const xi = Math.round(xb + (q + i) * s);
+    x.fillRect(xi, headerH, Math.max(1, Math.round(s)), T);
+  }
+  
+  if (bottomText) {
+    let fs = 20;
+    x.font = sh.f(fs);
+    let tw = x.measureText(bottomText).width;
+    while (tw > sh.cw && fs > 10) {
+      fs -= 1; x.font = sh.f(fs); tw = x.measureText(bottomText).width;
+    }
+    let tx = M;
+    if (bottomAlign === 'center') tx = (sh.W - tw) / 2;
+    else if (bottomAlign === 'right') tx = sh.W - M - tw;
+    x.fillText(bottomText, tx, headerH + T + 4);
+  }
+  sh.blocks.push(c);
+}
+
+function makeTwoColumnStrip(dep, length, col1, col2) {
+  for (let k = 2.5; k >= 0.4; k -= 0.05) {
+    const sh1 = new Sheet(length, k, dep);
+    for (const t of col1) sh1.text(t, 30, { min: 14, lines: 1 });
+    const sh2 = new Sheet(length, k, dep);
+    for (const t of col2) sh2.text(t, 30, { min: 14, lines: 1 });
+    
+    const h1 = sh1.blocks.reduce((a,b)=>a+b.height,0);
+    const h2 = sh2.blocks.reduce((a,b)=>a+b.height,0);
+    const maxH = (PW - 2*M) / 2;
+    
+    if (h1 <= maxH && h2 <= maxH) {
+      const c = dep.makeCanvas(length, PW);
+      const x = c.getContext('2d');
+      x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(sh1.render(0), M, M);
+      x.drawImage(sh2.render(0), M, PW/2 + M/2);
+      
+      const out = dep.makeCanvas(PW, length);
+      const ox = out.getContext('2d');
+      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, length);
+      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
+      ox.drawImage(c, 0, 0);
+      return out;
+    }
+  }
+  throw new Error('Info1 troppo lunga');
+}
+
+function makeInfo2Strip(dep, length, mid, bc2Human) {
+  const m1 = mid.find(t => /0844/.test(t)) || '';
+  const m2 = mid.find(t => /XD.*B2C/.test(t)) || '';
+  const m3 = mid.find(t => /FR.*CHR/.test(t)) || '';
+  const m4 = mid.find(t => /338.*FR/.test(t)) || '';
+  const m5 = mid.find(t => /04\/11\/26/.test(t)) || '';
+  const m83 = bc2Human || '83T20';
+  
+  const r1_left = m1.split('P')[0].trim();
+  const r1_right = 'P ' + (m2.replace(/XD-\s*B2C-\s*PSD/i, 'XD-B2C-PSD').replace(/SERVICE/i, '').trim());
+  
+  for (let k = 2.5; k >= 0.4; k -= 0.05) {
+    const c = dep.makeCanvas(length, PW);
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#000'; x.textBaseline = 'top';
+    let y = M;
+    let ok = true;
+    
+    const drawRow = (left, right, center) => {
+      const fs = Math.round(28 * k);
+      x.font = `bold ${fs}px ${FS}`;
+      const lh = Math.round(fs * 1.15);
+      if (y + lh > PW - M) { ok = false; return; }
+      if (left) x.fillText(left, M, y);
+      if (center) x.fillText(center, (length - x.measureText(center).width)/2, y);
+      if (right) x.fillText(right, length - M - x.measureText(right).width, y);
+      y += lh;
+    };
+    
+    drawRow(r1_left, r1_right, null);
+    drawRow('TRACK', null, null);
+    drawRow('SERVICE', null, null);
+    drawRow(null, null, m3);
+    drawRow(null, null, m4);
+    drawRow(null, null, m5);
+    drawRow(null, m83, null);
+    
+    if (ok) {
+      const out = dep.makeCanvas(PW, length);
+      const ox = out.getContext('2d');
+      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, length);
+      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
+      ox.drawImage(c, 0, 0);
+      return out;
+    }
+  }
+  throw new Error('Info2 troppo lunga');
+}
+
 // ---------------------------------------------------------------- lettura testo
 function lines(items, tol) {
   items = [...items].sort((a, b) => a.cy - b.cy || a.x0 - b.x0); const out = [];
@@ -328,92 +443,71 @@ export async function convertPdf(bytes, dep, opt = {}) {
             : kind === 'C' ? parseC(items)
             : parseD(items, vp);
 
-    // ---- BRT Estero: 4 strisce in formato InPost estero ----
+    // ---- BRT Estero ----
     if (kind === 'D') {
       const strips = [];
-      let bc1Strip = null, bc2Strip = null;
-
-      // Genera BC1
+      const top = dClean(d.topLines);
+      const mid = dClean(d.midLines);
+      
+      const depotIdx = top.findIndex(t => /^Depot/i.test(t));
+      let col1 = top, col2 = [];
+      if (depotIdx > 0) {
+        col1 = top.slice(0, depotIdx);
+        col2 = top.slice(depotIdx);
+      } else {
+        col1 = top.filter(t => /Address|Contact|References/i.test(t));
+        col2 = top.filter(t => !/Address|Contact|References/i.test(t));
+      }
+      
+      // BC1
+      let bc1Strip = null;
       if (d.bc1Zone) {
         const bc1 = await gd(page, vps, d.bc1Zone);
         const bits1 = sampleBarcode(bc1, 'x');
         const num1 = d.bc1Tracking || decode128(bits1) || '';
-        const s1Eff = Math.min(module_, Math.max(2, Math.floor(1000 / (bits1.length + 20))));
+        const maxS = Math.floor((PW - 2 * M) / (bits1.length + 20));
+        const s1Eff = Math.min(module_, Math.max(2, maxS));
+        
         const sh = new Sheet(PW, 1, dep);
-        if (d.bc1Human) sh.text(d.bc1Human, 36, { min: 18, align: 'center' });
-        barcodeBlock(sh, bits1, num1, s1Eff, true);
-        if (d.bc1Tracking) sh.text(d.bc1Tracking, 26, { min: 14, align: 'center' });
+        makeBarcodeStrip(sh, bits1, { left: '178', center: '287', right: '00' }, num1, s1Eff, 'center');
         bc1Strip = binarize(sh.render(20));
       }
-
-      // Genera BC2
+      
+      // Info 1
+      if (col1.length || col2.length) {
+        const len = bc1Strip ? Math.max(bc1Strip.height - 20, 450) : 450;
+        const c = makeTwoColumnStrip(dep, len, col1, col2);
+        strips.push(binarize(c));
+      }
+      if (bc1Strip) strips.push(bc1Strip);
+      
+      // BC2
+      let bc2Strip = null;
       if (d.bc2Zone) {
         const bc2 = await gd(page, vps, d.bc2Zone);
         const bits2 = sampleBarcode(bc2, 'x');
         const num2 = d.bc2Human2 || decode128(bits2) || '';
-        const s2Eff = Math.min(module_, Math.max(2, Math.floor(1000 / (bits2.length + 20))));
+        const maxS = Math.floor((PW - 2 * M) / (bits2.length + 20));
+        const s2Eff = Math.min(module_, Math.max(2, maxS));
+        
         const sh = new Sheet(PW, 1, dep);
-        if (d.bc2Human) sh.text(d.bc2Human, 36, { min: 18, align: 'center' });
-        barcodeBlock(sh, bits2, num2, s2Eff, true);
-        if (d.bc2Human2) sh.text(d.bc2Human2, 24, { min: 14, align: 'center' });
+        makeBarcodeStrip(sh, bits2, { right: d.bc2Human || '83T20' }, num2, s2Eff, 'left');
         bc2Strip = binarize(sh.render(20));
       }
-
-      // Dividi le info: Info 1 (fino a References), Info 2 (Depot... + midLines)
-      const cleanTop = dClean(d.topLines);
-      const depotIdx = cleanTop.findIndex(t => /^Depot/i.test(t));
-      let info1Lines = cleanTop;
-      let info2Lines = [];
-      if (depotIdx > 0) {
-        info1Lines = cleanTop.slice(0, depotIdx);
-        info2Lines = cleanTop.slice(depotIdx).concat(dClean(d.midLines));
-      } else {
-        info2Lines = dClean(d.midLines);
+      
+      // Info 2
+      if (mid.length || d.bc2Human) {
+        const len = bc2Strip ? Math.max(bc2Strip.height - 20, 450) : 450;
+        const c = makeInfo2Strip(dep, len, mid, d.bc2Human);
+        strips.push(binarize(c));
       }
-
-      // Info 1 (lunghezza = BC1)
-      if (info1Lines.length) {
-        const len = bc1Strip ? bc1Strip.height - 40 : 400;
-        try {
-          const sInfo = landStrip(dep, (sh) => {
-            for (const t of info1Lines) sh.text(t, 32, { min: 16, lines: 2 });
-          }, d, len, null, 40);
-          strips.push(binarize(sInfo));
-        } catch(e) {
-          const sInfo = landStrip(dep, (sh) => {
-            for (const t of info1Lines) sh.text(t, 32, { min: 16, lines: 2 });
-          }, d, 600, null, 40);
-          strips.push(binarize(sInfo));
-        }
-      }
-
-      // Aggiungi BC1
-      if (bc1Strip) strips.push(bc1Strip);
-
-      // Info 2 (lunghezza = BC2)
-      if (info2Lines.length) {
-        const len = bc2Strip ? bc2Strip.height - 40 : 500;
-        try {
-          const sInfo = landStrip(dep, (sh) => {
-            for (const t of info2Lines) sh.text(t, 32, { min: 16, lines: 2 });
-          }, d, len, null, 40);
-          strips.push(binarize(sInfo));
-        } catch(e) {
-          const sInfo = landStrip(dep, (sh) => {
-            for (const t of info2Lines) sh.text(t, 32, { min: 16, lines: 2 });
-          }, d, 800, null, 40);
-          strips.push(binarize(sInfo));
-        }
-      }
-
-      // Aggiungi BC2
       if (bc2Strip) strips.push(bc2Strip);
-
+      
       out.push({ kind, strips });
       continue;
     }
 
-    // ---- A / B / C: percorso comune (INVARIATO) ----
+    // ---- A / B / C ----
     const bcBox = kind === 'A' ? [70, 200, 235, 660]
                 : kind === 'B' ? [540, 88, 790, 156]
                 : [85, 165, 256, 252];
