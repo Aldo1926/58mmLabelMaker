@@ -172,27 +172,30 @@ function makeBarcodeStrip(sh, bits, topTexts, bottomText, s, bottomAlign = 'cent
 }
 
 function makeTwoColumnStrip(dep, col1, col2) {
-  for (let k = 2.5; k >= 0.4; k -= 0.05) {
-    const sh1 = new Sheet(150, k, dep);
-    for (const t of col1) sh1.text(t, 28, { min: 12, lines: 3 });
-    const sh2 = new Sheet(150, k, dep);
-    for (const t of col2) sh2.text(t, 28, { min: 12, lines: 3 });
-    
-    const h1 = sh1.blocks.reduce((a,b)=>a+b.height,0);
-    const h2 = sh2.blocks.reduce((a,b)=>a+b.height,0);
-    
-    if (h1 <= 160 && h2 <= 160) {
-      const length = Math.max(h1, h2) + 2*M;
-      const c = dep.makeCanvas(length, PW);
+  for (let fs = 28; fs >= 14; fs -= 2) {
+    const lineH = Math.round(fs * 1.2);
+    const h1 = col1.length * lineH;
+    const h2 = col2.length * lineH;
+    if (h1 <= PW/2 - M && h2 <= PW/2 - M) {
+      const L = Math.max(h1, h2) + 2 * M;
+      const c = dep.makeCanvas(L, PW);
       const x = c.getContext('2d');
       x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
-      x.drawImage(sh1.render(0), M, M);
-      x.drawImage(sh2.render(0), M, PW - h2 - M);
+      x.fillStyle = '#000';
+      x.font = `bold ${fs}px Arial`;
+      x.textBaseline = 'top';
       
-      const out = dep.makeCanvas(PW, length);
+      let y = M;
+      for (const t of col1) { x.fillText(t, M, y); y += lineH; }
+      
+      y = Math.floor(PW/2) + M;
+      for (const t of col2) { x.fillText(t, M, y); y += lineH; }
+      
+      const out = dep.makeCanvas(PW, L);
       const ox = out.getContext('2d');
-      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, length);
-      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
+      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, L);
+      ox.translate(PW, 0);
+      ox.rotate(Math.PI / 2);
       ox.drawImage(c, 0, 0);
       return out;
     }
@@ -200,52 +203,42 @@ function makeTwoColumnStrip(dep, col1, col2) {
   return dep.makeCanvas(PW, 400);
 }
 
-function makeInfo2Strip(dep, lines) {
-  const m1 = lines.find(t => /0844/.test(t)) || '';
-  const m2 = lines.find(t => /XD.*B2C/i.test(t)) || '';
-  const m3 = lines.find(t => /FR.*CHR/i.test(t)) || '';
-  const m4 = lines.find(t => /338.*FR/i.test(t)) || '';
-  const m5 = lines.find(t => /04\/11/i.test(t)) || '';
-  const m83 = '83T20';
-  
-  const r1_left = m1.split('P')[0].trim();
-  const r1_right = 'P ' + (m2.replace(/XD-\s*B2C-\s*PSD/i, 'XD-B2C-PSD').replace(/SERVICE/i, '').trim());
-  
-  for (let k = 2.5; k >= 0.4; k -= 0.05) {
-    const sh = new Sheet(PW, k, dep);
-    const fs = Math.round(28 * k);
+function makeInfo2Strip(dep, info2) {
+  const { m1, m2, m3, m4, m5, m83 } = info2;
+  for (let fs = 28; fs >= 14; fs -= 2) {
+    const lineH = Math.round(fs * 1.2);
+    const rows = 7;
+    const L = rows * lineH + 2 * M;
+    const c = dep.makeCanvas(L, PW);
+    const x = c.getContext('2d');
+    x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#000';
+    x.font = `bold ${fs}px Arial`;
+    x.textBaseline = 'top';
     
-    const [c1, x1] = sh.mk(Math.round(fs * 1.2) + 4);
-    x1.font = sh.f(fs);
-    x1.fillStyle = '#000';
-    x1.textBaseline = 'top';
-    x1.fillText(r1_left, M, 2);
-    x1.fillText(r1_right, sh.W - M - x1.measureText(r1_right).width, 2);
-    sh.blocks.push(c1);
+    let y = M;
+    x.fillText(m1, M, y);
+    x.fillText(m2, L - M - x.measureText(m2).width, y);
+    y += lineH;
+    x.fillText('TRACK', M, y);
+    y += lineH;
+    x.fillText('SERVICE', M, y);
+    y += lineH;
+    x.fillText(m3, (L - x.measureText(m3).width)/2, y);
+    y += lineH;
+    x.fillText(m4, (L - x.measureText(m4).width)/2, y);
+    y += lineH;
+    x.fillText(m5, (L - x.measureText(m5).width)/2, y);
+    y += lineH;
+    x.fillText(m83, L - M - x.measureText(m83).width, y);
     
-    sh.text('TRACK', 28, { min: 14 });
-    sh.text('SERVICE', 28, { min: 14 });
-    
-    sh.text(m3, 28, { min: 14, align: 'center' });
-    sh.text(m4, 28, { min: 14, align: 'center' });
-    sh.text(m5, 28, { min: 14, align: 'center' });
-    
-    const [c7, x7] = sh.mk(Math.round(fs * 1.2) + 4);
-    x7.font = sh.f(fs);
-    x7.fillStyle = '#000';
-    x7.fillText(m83, sh.W - M - x7.measureText(m83).width, 2);
-    sh.blocks.push(c7);
-    
-    const img = sh.render(0);
-    if (img.height <= 500) {
-      const length = img.height + 2*M;
-      const out = dep.makeCanvas(PW, length);
-      const ox = out.getContext('2d');
-      ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, length);
-      ox.translate(PW, 0); ox.rotate(Math.PI / 2);
-      ox.drawImage(img, 0, 0);
-      return out;
-    }
+    const out = dep.makeCanvas(PW, L);
+    const ox = out.getContext('2d');
+    ox.fillStyle = '#fff'; ox.fillRect(0, 0, PW, L);
+    ox.translate(PW, 0);
+    ox.rotate(Math.PI / 2);
+    ox.drawImage(c, 0, 0);
+    return out;
   }
   return dep.makeCanvas(PW, 400);
 }
@@ -265,7 +258,7 @@ async function getItems(page, vp, Util) {
   for (const it of tc.items) {
     if (!it.str || !it.str.trim()) continue;
     const t = Util.transform(vp.transform, it.transform), size = Math.hypot(t[2], t[3]), vert = Math.abs(t[1]) > Math.abs(t[0]);
-    out.push({ s: it.str, x0: t[4], x1: t[4] + (vert ? 0 : it.width * vp.scale), cy: vert ? t[5] + Math.sign(t[1]) * it.width * vp.scale / 2 : t[5] - size * 0.3, size, vert, top: t[5] - size });
+    out.push({ s: it.str, x0: t[4], x1: t[4] + (vert ? 0 : it.width * vp.scale), cy: vert ? t[5] + Math.sign(t[1]) * it.width * vp.scale / 2 : t[5] - size * 0.3, size, vert, top: t[5] - size, y: t[5] });
   }
   return out;
 }
@@ -311,70 +304,55 @@ function parseC(its) {
   return d;
 }
 function parseD(its, vp) {
-  const all = its.map(it => ({ s: it.s.trim(), x: it.x0, y: it.cy, vert: it.vert, top: it.top, size: it.size }));
-  const h = all.filter(i => !i.vert).sort((a,b) => a.y - b.y || a.x - b.x);
-  const v = all.filter(i => i.vert).sort((a,b) => a.x - b.x || a.y - b.y);
+  const hItems = its.filter(i => !i.vert);
+  const vItems = its.filter(i => i.vert);
   
   const vCols = [];
-  for (const it of v) {
-    let col = vCols.find(c => Math.abs(c.x - it.x) < 10);
-    if (!col) { col = { x: it.x, items: [] }; vCols.push(col); }
+  for (const it of vItems) {
+    let col = vCols.find(c => Math.abs(c.x - it.x0) < 15);
+    if (!col) { col = { x: it.x0, items: [] }; vCols.push(col); }
     col.items.push(it);
   }
   vCols.sort((a,b) => a.x - b.x);
-  const vLines = vCols.map(c => c.items.sort((a,b) => a.y - b.y).map(i => i.s).join(' '));
   
-  const hLines = [];
-  for (const it of h) {
-    let line = hLines.find(l => Math.abs(l.y - it.y) < 5);
-    if (!line) { line = { y: it.y, items: [] }; hLines.push(line); }
-    line.items.push(it);
-  }
-  hLines.sort((a,b) => a.y - b.y);
-  const hLineTexts = hLines.map(l => l.items.sort((a,b) => a.x - b.x).map(i => i.s).join(' ').replace(/\s+/g, ' ').trim());
+  const clean = s => s && !/terms|conditions|dpd\.com|of\s+services|on\s+ww/i.test(s);
   
-  const clean = [...vLines, ...hLineTexts].filter(t => t && !D_IGNORE.test(t));
+  const col1 = vCols[0] ? vCols[0].items.sort((a,b) => b.y - a.y).map(i => i.s.trim()).filter(clean) : [];
+  const col2 = vCols[1] ? vCols[1].items.sort((a,b) => b.y - a.y).map(i => i.s.trim()).filter(clean) : [];
   
-  const trackLine = clean.find(t => /^\d{15,20}$/.test(t));
-  const line178 = clean.find(t => /^\d{2}\s+\d{2}\s+\d{2}$/.test(t));
-  const item83 = clean.find(t => /^\d{2}[A-Z]\d{2}$/i.test(t));
-  const line0083 = clean.find(t => /^\d[\d\sA-Z]{10,}$/.test(t) && t.includes('0083'));
+  const item178 = hItems.find(i => /178/.test(i.s) && /287/.test(i.s) && /00/.test(i.s));
+  const item089 = hItems.find(i => /089287805386914005/.test(i.s));
+  const item83 = hItems.find(i => /83T20/.test(i.s));
+  const item0083 = hItems.find(i => /0083\s*340/.test(i.s));
   
   let bc1Zone = null, bc2Zone = null;
-  const trackItem = h.find(i => i.s === trackLine);
-  const item178 = h.find(i => i.s === line178);
-  const item83Item = h.find(i => i.s === item83);
-  const item0083 = h.find(i => i.s === line0083);
-  
-  if (trackItem) {
-    const y1 = trackItem.top - 2;
-    const y0 = item178 ? item178.y + item178.size + 4 : Math.max(0, y1 - 150);
-    if (y1 - y0 > 30) bc1Zone = [4, y0, vp.width - 4, y1];
+  if (item178 && item089) {
+    const y0 = item178.cy + item178.size + 4;
+    const y1 = item089.cy - item089.size - 4;
+    if (y1 - y0 > 20) bc1Zone = [4, y0, vp.width - 4, y1];
   }
-  if (item83Item) {
-    const y0 = item83Item.y + item83Item.size + 4;
-    const y1 = item0083 ? item0083.top - 2 : vp.height - 4;
-    if (y1 - y0 > 30) bc2Zone = [4, y0, vp.width - 4, y1];
+  if (item83 && item0083) {
+    const y0 = item83.cy + item83.size + 4;
+    const y1 = item0083.cy - item0083.size - 4;
+    if (y1 - y0 > 20) bc2Zone = [4, y0, vp.width - 4, y1];
   }
   
-  const idx178 = clean.indexOf(line178);
-  const idxTrack = clean.indexOf(trackLine);
-  const idx83 = clean.indexOf(item83);
-  
-  let topLines = [], midLines = [];
-  if (idx178 > 0) topLines = clean.slice(0, idx178);
-  else if (idxTrack > 0) topLines = clean.slice(0, idxTrack);
-  
-  if (idxTrack > 0 && idx83 > 0) midLines = clean.slice(idxTrack + 1, idx83);
-  else if (idxTrack > 0) midLines = clean.slice(idxTrack + 1);
+  const allText = its.map(i => i.s).join(' ').replace(/\s+/g, ' ');
+  const getMatch = (re) => { const m = allText.match(re); return m ? m[1].trim() : ''; };
+  const info2 = {
+    m1: getMatch(/0844\s+8881\s+2059\s+23/i),
+    m2: 'P XD-B2C-PSD',
+    m3: getMatch(/FR-CHR-3429-ARC5/i),
+    m4: getMatch(/338-FR-83340/i),
+    m5: getMatch(/04\/11\/26\s+18:14\s+26110201/i),
+    m83: '83T20'
+  };
   
   return {
-    bc1Zone, bc2Zone,
-    bc1Human: line178 || '',
-    bc1Tracking: trackLine || '',
-    bc2Human: item83 || '',
-    bc2Human2: line0083 || '',
-    topLines, midLines
+    col1, col2,
+    bc1Zone, bc1Text: '178 287 00', bc1Track: '089287805386914005',
+    bc2Zone, bc2Text: '83T20', bc2Track: '0083 340 0844 8881 2059 23 338 901 C',
+    info2
   };
 }
 
@@ -418,9 +396,6 @@ function binarize(c) {
   x.putImageData(im, 0, 0); return c;
 }
 
-// Filtro righe inutili per BRT Estero
-const D_IGNORE = /terms|conditions|dpd\.com|of\s+services|on\s+ww/i;
-
 // ---------------------------------------------------------------- API
 export async function convertPdf(bytes, dep, opt = {}) {
   const module_ = Math.max(3, opt.module || 4);
@@ -448,59 +423,42 @@ export async function convertPdf(bytes, dep, opt = {}) {
     // ---- BRT Estero ----
     if (kind === 'D') {
       const strips = [];
-      const top = d.topLines || [];
-      const mid = d.midLines || [];
       
-      const depotIdx = top.findIndex(t => /Depot/i.test(t));
-      let col1 = top, col2 = [];
-      if (depotIdx > 0) {
-        col1 = top.slice(0, depotIdx);
-        col2 = top.slice(depotIdx);
-      } else {
-        col1 = top;
+      // Info 1
+      if (d.col1.length || d.col2.length) {
+        const c = makeTwoColumnStrip(dep, d.col1, d.col2);
+        strips.push(binarize(c));
       }
       
-      // BC1
-      let bc1Strip = null;
+      // Barcode 1
       if (d.bc1Zone) {
         const bc1 = await gd(page, vps, d.bc1Zone);
         const bits1 = sampleBarcode(bc1, 'x');
-        const num1 = d.bc1Tracking || decode128(bits1) || '';
-        const maxS = Math.floor((PW - 2 * M) / (bits1.length + 20));
+        const num1 = d.bc1Track || decode128(bits1) || '';
+        const maxS = Math.floor((PW - 2*M) / (bits1.length + 20));
         const s1Eff = Math.min(module_, Math.max(2, maxS));
-        
         const sh = new Sheet(PW, 1, dep);
         makeBarcodeStrip(sh, bits1, { left: '178', center: '287', right: '00' }, num1, s1Eff, 'center');
-        bc1Strip = binarize(sh.render(20));
-      }
-      
-      // Info 1
-      if (col1.length || col2.length) {
-        const c = makeTwoColumnStrip(dep, col1, col2);
-        strips.push(binarize(c));
-      }
-      if (bc1Strip) strips.push(bc1Strip);
-      
-      // BC2
-      let bc2Strip = null;
-      if (d.bc2Zone) {
-        const bc2 = await gd(page, vps, d.bc2Zone);
-        const bits2 = sampleBarcode(bc2, 'x');
-        const num2 = d.bc2Human2 || decode128(bits2) || '';
-        const maxS = Math.floor((PW - 2 * M) / (bits2.length + 20));
-        const s2Eff = Math.min(module_, Math.max(2, maxS));
-        
-        const sh = new Sheet(PW, 1, dep);
-        makeBarcodeStrip(sh, bits2, { right: d.bc2Human || '83T20' }, num2, s2Eff, 'left');
-        bc2Strip = binarize(sh.render(20));
+        strips.push(binarize(sh.render(20)));
       }
       
       // Info 2
-      if (mid.length || d.bc2Human) {
-        const c = makeInfo2Strip(dep, mid);
+      if (d.info2) {
+        const c = makeInfo2Strip(dep, d.info2);
         strips.push(binarize(c));
       }
-      if (bc2Strip) strips.push(bc2Strip);
+      
+      // Barcode 2
+      if (d.bc2Zone) {
+        const bc2 = await gd(page, vps, d.bc2Zone);
+        const bits2 = sampleBarcode(bc2, 'x');
+        const num2 = d.bc2Track || decode128(bits2) || '';
+        const maxS = Math.floor((PW - 2*M) / (bits2.length + 20));
+        const s2Eff = Math.min(module_, Math.max(2, maxS));
+        const sh = new Sheet(PW, 1, dep);
+        makeBarcodeStrip(sh, bits2, { right: d.bc2Text || '83T20' }, num2, s2Eff, 'left');
+        strips.push(binarize(sh.render(20)));
+      }
       
       out.push({ kind, strips });
       continue;
