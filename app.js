@@ -22,7 +22,6 @@ async function convertAny(bytes, dep, opt) {
     const labels = await convertPdf(bytes, dep, opt);
     if (labels.length) return labels;
   } catch (e) { firstErr = e; }
-  // Fallback: normalizza su A4 e riprova (risolve i PDF A6 tipo Vinted)
   const fixed = await toA4(bytes, dep);
   try {
     const labels = await convertPdf(fixed, dep, opt);
