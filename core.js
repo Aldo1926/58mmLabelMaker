@@ -114,7 +114,7 @@ function decode128(bits) {
 }
 
 // ---------------------------------------------------------------- blocchi grafici
-function barcodeBlock(sh, bits, num, s) {
+function barcodeBlock(sh, bits, num, s, noNum = false) {
   const q = 10, N = bits.length, L = (N + 2 * q) * s; let fs = 44;
   while (fs > 16 && sh.w(num, fs, true) > L - 16) fs -= 2;
   const strip = Math.floor(fs * 1.2), xb = M + strip + 6, T = sh.W - M - xb, [c, x] = sh.mk(L);
@@ -123,8 +123,10 @@ function barcodeBlock(sh, bits, num, s) {
     const y = Math.round((q + i) * s);
     x.fillRect(xb, y, T, Math.max(1, Math.round(s)));
   }
-  x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
-  x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.strokeStyle = '#000'; x.lineWidth = Math.max(1.2, fs / 22); x.lineJoin = 'round'; x.strokeText(num, 0, 0); x.restore();
+  if (!noNum) {
+    x.save(); x.translate(M + strip / 2 + fs / 2, (L - sh.w(num, fs, true)) / 2); x.rotate(Math.PI / 2);
+    x.font = sh.f(fs, true); x.fillText(num, 0, 0); x.strokeStyle = '#000'; x.lineWidth = Math.max(1.2, fs / 22); x.lineJoin = 'round'; x.strokeText(num, 0, 0); x.restore();
+  }
   sh.blocks.push(c);
 }
 function dmBlock(sh, mods) {
@@ -211,10 +213,14 @@ function parseD(its, vp) {
   const lineTracking = lineArr.find(l => /^\d{15,20}$/.test(l.t));
   const line178 = lineTracking ? [...lineArr].reverse().find(l =>
     l.cy < lineTracking.cy && /^\d{2,4}(\s+\d{2,4}){1,3}$/.test(l.t)) : null;
-  const line83 = [...lineArr].reverse().find(l =>
-    /^[A-Z0-9]{4,6}$/.test(l.t) && (!lineTracking || l.cy > lineTracking.cy + 4));
-  const line0083 = line83 ? lineArr.find(l =>
-    l.cy > line83.cy && /^\d[\d\sA-Z]{10,}$/.test(l.t)) : null;
+
+  const trackCy = lineTracking ? lineTracking.cy : 0;
+  const item83 = [...h]
+    .filter(i => i.cy > trackCy + 4 && /^\d{2}[A-Z]\d{2}$/i.test(i.s.trim()))
+    .sort((a, b) => b.cy - a.cy)[0];
+
+  const line0083 = item83 ? lineArr.find(l =>
+    l.cy > item83.cy && /^\d[\d\sA-Z]{10,}$/.test(l.t)) : null;
 
   let bc1Zone = null, bc2Zone = null;
   if (lineTracking) {
@@ -222,8 +228,8 @@ function parseD(its, vp) {
     const y0 = line178 ? line178.cy + line178.size + 4 : Math.max(0, y1 - 150);
     if (y1 - y0 > 30) bc1Zone = [4, y0, vp.width - 4, y1];
   }
-  if (line83) {
-    const y0 = line83.cy + line83.size + 4;
+  if (item83) {
+    const y0 = item83.cy + item83.size + 4;
     const y1 = line0083 ? line0083.top - 2 : vp.height - 4;
     if (y1 - y0 > 30) bc2Zone = [4, y0, vp.width - 4, y1];
   }
@@ -232,14 +238,23 @@ function parseD(its, vp) {
   const topLines = lineArr.filter(l => l.cy < bc1Start).map(l => l.t);
 
   const midStart = lineTracking ? lineTracking.cy + 2 : -1;
-  const midEnd = line83 ? line83.cy - 2 : vp.height;
-  const midLines = lineArr.filter(l => l.cy > midStart && l.cy < midEnd).map(l => l.t);
+  const midEnd = item83 ? item83.cy - 2 : (line0083 ? line0083.cy - 2 : vp.height);
+  const midLines = lineArr
+    .filter(l => l.cy > midStart && l.cy < midEnd)
+    .map(l => {
+      let t = l.t;
+      if (item83 && l.items.includes(item83)) {
+        t = l.items.filter(i => i !== item83).map(i => i.s).join(' ').trim();
+      }
+      return t;
+    })
+    .filter(t => t && !/^\d{2}[A-Z]\d{2}$/i.test(t));
 
   return {
     bc1Zone, bc2Zone,
     bc1Human: line178 ? line178.t : '',
     bc1Tracking: lineTracking ? lineTracking.t : '',
-    bc2Human: line83 ? line83.t : '',
+    bc2Human: item83 ? item83.s.trim() : '',
     bc2Human2: line0083 ? line0083.t : '',
     topLines, midLines
   };
@@ -286,7 +301,7 @@ function binarize(c) {
 }
 
 // Filtro righe inutili per BRT Estero
-const D_IGNORE = /Terms\s*&\s*Conditions|ww\.dpd\.com|www\.dpd\.com/i;
+const D_IGNORE = /terms|conditions|dpd\.com|of\s+services|on\s+ww/i;
 const dClean = arr => (arr || []).filter(t => t && !D_IGNORE.test(t));
 
 // ---------------------------------------------------------------- API
@@ -313,10 +328,24 @@ export async function convertPdf(bytes, dep, opt = {}) {
             : kind === 'C' ? parseC(items)
             : parseD(items, vp);
 
-    // ---- BRT Estero: 4 strisce in formato InPost estero ----
+    // ---- BRT Estero: 4 strisce (info1 ruotata, BC1, info2 ruotata, BC2) ----
     if (kind === 'D') {
-      // Strip barcode BC1
-      let bc1Strip = null, bc1H = 0;
+      const strips = [];
+      const cleanTop = dClean(d.topLines);
+      const cleanMid = dClean(d.midLines);
+      const L_INFO = Math.max(500, Math.max(cleanTop.length, cleanMid.length) * 40);
+
+      // Strip 1: info1 (landscape ruotato, come InPost estero)
+      if (cleanTop.length) {
+        try {
+          const s1 = landStrip(dep, (sh) => {
+            for (const t of cleanTop) sh.text(t, 32, { min: 16, lines: 2 });
+          }, d, L_INFO, null, 40);
+          strips.push(binarize(s1));
+        } catch (e) { console.warn('info1', e); }
+      }
+
+      // Strip 2: BC1 (178 287 00 + barcode + tracking sotto)
       if (d.bc1Zone) {
         const bc1 = await gd(page, vps, d.bc1Zone);
         const bits1 = sampleBarcode(bc1, 'x');
@@ -324,14 +353,22 @@ export async function convertPdf(bytes, dep, opt = {}) {
         const s1Eff = Math.min(module_, Math.max(2, Math.floor(1000 / (bits1.length + 20))));
         const sh = new Sheet(PW, 1, dep);
         if (d.bc1Human) sh.text(d.bc1Human, 36, { min: 18, align: 'center' });
-        barcodeBlock(sh, bits1, num1, s1Eff);
+        barcodeBlock(sh, bits1, num1, s1Eff, true);
         if (d.bc1Tracking) sh.text(d.bc1Tracking, 26, { min: 14, align: 'center' });
-        bc1Strip = binarize(sh.render(20));
-        bc1H = bc1Strip.height;
+        strips.push(binarize(sh.render(20)));
       }
 
-      // Strip barcode BC2
-      let bc2Strip = null, bc2H = 0;
+      // Strip 3: info2 (landscape ruotato)
+      if (cleanMid.length) {
+        try {
+          const s2 = landStrip(dep, (sh) => {
+            for (const t of cleanMid) sh.text(t, 32, { min: 16, lines: 2 });
+          }, d, L_INFO, null, 40);
+          strips.push(binarize(s2));
+        } catch (e) { console.warn('info2', e); }
+      }
+
+      // Strip 4: BC2 (83T20 + barcode + 0083 340... sotto)
       if (d.bc2Zone) {
         const bc2 = await gd(page, vps, d.bc2Zone);
         const bits2 = sampleBarcode(bc2, 'x');
@@ -339,42 +376,10 @@ export async function convertPdf(bytes, dep, opt = {}) {
         const s2Eff = Math.min(module_, Math.max(2, Math.floor(1000 / (bits2.length + 20))));
         const sh = new Sheet(PW, 1, dep);
         if (d.bc2Human) sh.text(d.bc2Human, 36, { min: 18, align: 'center' });
-        barcodeBlock(sh, bits2, num2, s2Eff);
+        barcodeBlock(sh, bits2, num2, s2Eff, true);
         if (d.bc2Human2) sh.text(d.bc2Human2, 24, { min: 14, align: 'center' });
-        bc2Strip = binarize(sh.render(20));
-        bc2H = bc2Strip.height;
+        strips.push(binarize(sh.render(20)));
       }
-
-      // Strip info (landscape ruotate) allineate in altezza al barcode corrispondente
-      const infoLand = (lines, targetH) => {
-        const clean = dClean(lines);
-        if (!clean.length) return null;
-        const length = Math.max(220, targetH - 40);
-        for (let k = 2.5; k >= 0.4; k -= 0.05) {
-          const sh = new Sheet(length, k, dep);
-          for (const t of clean) sh.text(t, 30, { min: 14, lines: 2 });
-          const img = sh.render(0);
-          if (img.height <= PW - 2 * M) {
-            const c = dep.makeCanvas(PW, length + 40), x = c.getContext('2d');
-            x.fillStyle = '#fff'; x.fillRect(0, 0, PW, length + 40);
-            x.translate((PW - img.height) / 2 + img.height, 0);
-            x.rotate(Math.PI / 2);
-            x.drawImage(img, 0, 0);
-            return binarize(c);
-          }
-        }
-        return null;
-      };
-
-      const info1 = infoLand(d.topLines, bc1H || 500);
-      const info2 = infoLand(d.midLines, bc2H || 500);
-
-      // Ordine: info1 → BC1 → info2 → BC2
-      const strips = [];
-      if (info1) strips.push(info1);
-      if (bc1Strip) strips.push(bc1Strip);
-      if (info2) strips.push(info2);
-      if (bc2Strip) strips.push(bc2Strip);
 
       out.push({ kind, strips });
       continue;
